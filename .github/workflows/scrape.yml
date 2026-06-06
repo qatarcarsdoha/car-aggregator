@@ -21,7 +21,10 @@ jobs:
 
       - run: npm ci
 
-      - run: npx prisma generate
+      - name: Sync DB schema (also generates client)
+        run: npx prisma db push
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Run sync
         run: npm run sync
