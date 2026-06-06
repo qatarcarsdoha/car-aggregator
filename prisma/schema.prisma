@@ -1,0 +1,97 @@
+// Car aggregator schema
+// Source: Qatar Living + Qatar Sale (TBD)
+// Run: npx prisma db push (after setting DATABASE_URL)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Listing {
+  id              String   @id @default(cuid())
+
+  // Source tracking — composite unique key prevents duplicates per source
+  source          String   // "qatarliving" | "qatarsale" | "mzadqatar"
+  sourceAdId      String   // The platform's internal ad ID (e.g. 156373)
+  sourceAdIdNum   Int?     // Numeric form of sourceAdId for stable sort/joins
+  sourceUrl       String   // Full URL back to the original listing
+  sourceUpdatedAt DateTime? // From QL's `styleGenerated` — true recency signal
+
+  // Core listing fields
+  title           String?
+  description     String?  @db.Text
+
+  // Vehicle attributes
+  make            String?
+  model           String?
+  trim            String?
+  year            Int?
+  priceQAR        Int?     // Stored as integer QAR
+  mileageKM       Int?
+  fuelType        String?  // "Petrol" | "Diesel" | "Electric" | "Hybrid"
+  cylinders       String?
+  engineSize      String?  // "3.0", "4.4" etc — left as string since some sources use ranges
+  transmission    String?
+  bodyType        String?
+  doors           String?
+  seats           String?
+  seatType        String?  // "Leather" | "Fabric" etc
+  wheelDrive      String?  // "Four" | "All" | "Rear" | "Front"
+  exteriorColor   String?
+  interiorColor   String?
+  imported        String?  // Country of import
+  serviceHistory  String?
+  insuranceType   String?
+  isBrandNew      Boolean  @default(false)
+  isShowroom      Boolean  @default(false)
+  installmentsAvailable Boolean @default(false)
+  dealRating      Int?
+
+  // Feature list (from carFeatures[].carFeature.carFeatureName)
+  features        Json     @default("[]")
+
+  // Location & dealer
+  location        String?
+  dealerName      String?
+  contactPhone    String?
+  contactWhatsapp String?
+
+  // Media — array of full image URLs (CDN base already prepended)
+  images          Json     // string[]
+
+  // Tracking
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @updatedAt
+  isActive        Boolean  @default(true)
+
+  // Raw payload for debugging when the API shape changes
+  rawData         Json
+
+  @@unique([source, sourceAdId])
+  @@index([firstSeenAt])
+  @@index([sourceUpdatedAt])
+  @@index([priceQAR])
+  @@index([mileageKM])
+  @@index([year])
+  @@index([make, model])
+  @@index([isActive, sourceUpdatedAt])
+  @@index([isActive, firstSeenAt])
+}
+
+model SyncRun {
+  id          String   @id @default(cuid())
+  source      String
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  status      String   // "running" | "success" | "failed"
+  pagesFetched Int     @default(0)
+  newListings Int     @default(0)
+  updatedListings Int @default(0)
+  error       String?  @db.Text
+
+  @@index([source, startedAt])
+}
