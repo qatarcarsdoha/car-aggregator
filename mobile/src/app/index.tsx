@@ -4,29 +4,34 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getListings, getMeta, type Listing } from "@/lib/api";
-import { SORT_OPTIONS, type SortValue } from "@/lib/format";
+import { SORT_OPTIONS, SORT_SHORT, type SortValue } from "@/lib/format";
 import { ListingCard } from "@/components/listing-card";
+import { FilterDropdown } from "@/components/filter-dropdown";
+import { fonts, radius, useTheme, type Palette } from "@/lib/theme";
+
+const ALL = "__all__";
 
 const PER_PAGE = 20;
 
 export default function FeedScreen() {
   const insets = useSafeAreaInsets();
+  const { c } = useTheme();
+  const s = useMemo(() => makeStyles(c), [c]);
+
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<SortValue>("newest");
   const [make, setMake] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
 
-  // No debounce: react-query keys on q directly. The dataset is small and the
-  // API is fast, so typing re-queries cheaply. Keep it simple.
   const { data: meta } = useQuery({
     queryKey: ["meta", make],
     queryFn: () => getMeta(make),
@@ -62,57 +67,83 @@ export default function FeedScreen() {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: 8 }]}>
-      <View style={styles.controls}>
-        <TextInput
-          style={styles.search}
-          placeholder="Search make, model, year…"
-          placeholderTextColor="rgba(127,127,127,0.7)"
-          value={q}
-          onChangeText={setQ}
-          returnKeyType="search"
-          autoCorrect={false}
-        />
+    <View style={[s.container, { paddingTop: insets.top }]}>
+      <View style={s.header}>
+        <View style={s.headerTop}>
+          <View style={s.headerLeft}>
+            <Text style={s.kicker}>Doha — Live feed</Text>
+            <Text style={s.h1}>
+              Qatar <Text style={s.h1Accent}>Cars</Text>
+            </Text>
+          </View>
+          <View style={s.headerRight}>
+            <Text style={s.count}>{total.toLocaleString("en-US")}</Text>
+            <Text style={s.countLabel}>Listings</Text>
+          </View>
+        </View>
 
-        <ChipRow>
-          {SORT_OPTIONS.map((o) => (
-            <Chip
-              key={o.value}
-              label={o.label}
-              active={sort === o.value}
-              onPress={() => setSort(o.value)}
-            />
-          ))}
-        </ChipRow>
+        <View style={s.searchWrap}>
+          <MaterialCommunityIcons name="magnify" size={18} color={c.inkMuted2} />
+          <TextInput
+            style={s.search}
+            placeholder="Search make, model, year…"
+            placeholderTextColor={c.inkMuted2}
+            value={q}
+            onChangeText={setQ}
+            returnKeyType="search"
+            autoCorrect={false}
+          />
+          {q.length > 0 && (
+            <Pressable onPress={() => setQ("")} hitSlop={8}>
+              <MaterialCommunityIcons name="close-circle" size={18} color={c.inkMuted2} />
+            </Pressable>
+          )}
+        </View>
 
-        {meta?.makes && meta.makes.length > 0 && (
-          <ChipRow>
-            <Chip label="All makes" active={make === null} onPress={() => selectMake(null)} />
-            {meta.makes.map((m) => (
-              <Chip key={m} label={m} active={make === m} onPress={() => selectMake(m)} />
-            ))}
-          </ChipRow>
-        )}
-
-        {make && meta?.models && meta.models.length > 0 && (
-          <ChipRow>
-            <Chip label="All models" active={model === null} onPress={() => setModel(null)} />
-            {meta.models.map((m) => (
-              <Chip key={m} label={m} active={model === m} onPress={() => setModel(m)} />
-            ))}
-          </ChipRow>
-        )}
+        <View style={s.filterRow}>
+          <FilterDropdown
+            title="Make"
+            triggerLabel={make ?? "Make"}
+            active={!!make}
+            selected={make ?? ALL}
+            options={[
+              { value: ALL, label: "All makes" },
+              ...(meta?.makes ?? []).map((m) => ({ value: m, label: m })),
+            ]}
+            onSelect={(v) => selectMake(v === ALL ? null : v)}
+          />
+          <FilterDropdown
+            title="Model"
+            triggerLabel={model ?? "Model"}
+            active={!!model}
+            disabled={!make || (meta?.models?.length ?? 0) === 0}
+            selected={model ?? ALL}
+            options={[
+              { value: ALL, label: "All models" },
+              ...(meta?.models ?? []).map((m) => ({ value: m, label: m })),
+            ]}
+            onSelect={(v) => setModel(v === ALL ? null : v)}
+          />
+          <FilterDropdown
+            title="Sort by"
+            triggerLabel={SORT_SHORT[sort]}
+            active={sort !== "newest"}
+            selected={sort}
+            options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            onSelect={(v) => setSort(v as SortValue)}
+          />
+        </View>
       </View>
 
       {isLoading ? (
-        <View style={styles.center}>
-          <ActivityIndicator />
+        <View style={s.center}>
+          <ActivityIndicator color={c.brand} />
         </View>
       ) : isError ? (
-        <View style={styles.center}>
-          <Text style={styles.muted}>Couldn&apos;t load listings.</Text>
-          <Pressable style={styles.retry} onPress={() => refetch()}>
-            <Text style={styles.retryText}>Retry</Text>
+        <View style={s.center}>
+          <Text style={s.muted}>Couldn&apos;t load listings.</Text>
+          <Pressable style={s.retry} onPress={() => refetch()}>
+            <Text style={s.retryText}>Retry</Text>
           </Pressable>
         </View>
       ) : (
@@ -120,84 +151,86 @@ export default function FeedScreen() {
           data={listings}
           keyExtractor={(l) => l.id}
           renderItem={({ item }) => <ListingCard listing={item} />}
-          contentContainerStyle={{ paddingHorizontal: 14, paddingBottom: insets.bottom + 24 }}
-          ListHeaderComponent={
-            <Text style={styles.count}>{total.toLocaleString("en-US")} listings</Text>
-          }
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 24 }}
           ListEmptyComponent={
-            <View style={styles.center}>
-              <Text style={styles.muted}>No listings match your filters.</Text>
+            <View style={s.center}>
+              <Text style={s.muted}>No listings match your filters.</Text>
             </View>
           }
           onEndReached={() => hasNextPage && !isFetchingNextPage && fetchNextPage()}
           onEndReachedThreshold={0.6}
           ListFooterComponent={
-            isFetchingNextPage ? <ActivityIndicator style={{ marginVertical: 16 }} /> : null
+            isFetchingNextPage ? (
+              <ActivityIndicator style={{ marginVertical: 20 }} color={c.brand} />
+            ) : listings.length > 0 ? (
+              <Text style={s.endLabel}>End of feed</Text>
+            ) : null
           }
-          refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={refetch} />}
+          refreshControl={
+            <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={c.brand} />
+          }
         />
       )}
     </View>
   );
 }
 
-function ChipRow({ children }: { children: React.ReactNode }) {
-  return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.chipRow}
-    >
-      {children}
-    </ScrollView>
-  );
+function makeStyles(c: Palette) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.bone },
+    header: {
+      paddingHorizontal: 16,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      gap: 12,
+    },
+    headerTop: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", paddingTop: 8 },
+    headerLeft: { flex: 1 },
+    headerRight: { alignItems: "flex-end" },
+    kicker: {
+      fontFamily: fonts.mono,
+      fontSize: 10,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      color: c.inkMuted,
+    },
+    h1: { fontFamily: fonts.displayMedium, fontSize: 34, color: c.ink, letterSpacing: -0.5, marginTop: 2 },
+    h1Accent: { fontFamily: fonts.displayItalic, color: c.brand },
+    count: { fontFamily: fonts.display, fontSize: 26, color: c.ink, lineHeight: 28 },
+    countLabel: {
+      fontFamily: fonts.mono,
+      fontSize: 9,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      color: c.inkMuted,
+      marginTop: 2,
+    },
+    searchWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 14,
+      height: 44,
+      borderRadius: radius.md,
+      backgroundColor: c.paper,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+    },
+    search: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: c.ink, paddingVertical: 0 },
+    filterRow: { flexDirection: "row", gap: 8 },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 14 },
+    muted: { fontFamily: fonts.body, color: c.inkMuted, fontSize: 15 },
+    retry: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: radius.sm, backgroundColor: c.brand },
+    retryText: { fontFamily: fonts.bodySemiBold, color: c.bone, fontSize: 14 },
+    endLabel: {
+      fontFamily: fonts.mono,
+      fontSize: 10,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      color: c.inkMuted2,
+      textAlign: "center",
+      marginVertical: 24,
+    },
+  });
 }
-
-function Chip({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.chip, active && styles.chipActive]}
-      hitSlop={6}
-    >
-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  controls: { gap: 8, paddingBottom: 6 },
-  search: {
-    marginHorizontal: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: "rgba(127,127,127,0.12)",
-    fontSize: 15,
-    color: "#888",
-  },
-  chipRow: { paddingHorizontal: 14, gap: 8 },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: "rgba(127,127,127,0.12)",
-  },
-  chipActive: { backgroundColor: "#208AEF" },
-  chipText: { fontSize: 13, fontWeight: "500", opacity: 0.8 },
-  chipTextActive: { color: "#fff", opacity: 1 },
-  count: { fontSize: 13, opacity: 0.6, marginVertical: 10 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 12 },
-  muted: { opacity: 0.6, fontSize: 15 },
-  retry: { paddingHorizontal: 18, paddingVertical: 9, borderRadius: 8, backgroundColor: "#208AEF" },
-  retryText: { color: "#fff", fontWeight: "600" },
-});

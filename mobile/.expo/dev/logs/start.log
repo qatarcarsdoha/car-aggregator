@@ -1,0 +1,60 @@
+{"_e":"root:init","_t":1780826041285,"format":"v0-jsonl","version":"56.1.13"}
+{"_e":"env:mode","_t":1780826041286,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1780826041288,"mode":"development","files":["../../../.env"],"env":{"EXPO_PUBLIC_API_BASE_URL":"https://doha-cars.vercel.app","EXPO_PUBLIC_API_KEY":"2df2dbbe1869c719006a4f4af8859fef03c92dd1b7ec1597"}}
+{"_e":"devserver:start","_t":1780826041439,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../../../src/app","serverComponents":false,"serverActions":false,"serverRendering":true,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1780826041569,"serverRoot":"../../..","projectRoot":"../../..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":true,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1780826041860,"atlas":false,"workers":9,"host":"::","port":8081}
+{"_e":"root:init","_t":1780927321426,"format":"v0-jsonl","version":"56.1.13"}
+{"_e":"env:mode","_t":1780927321426,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1780927321428,"mode":"development","files":["../../../.env"],"env":{"EXPO_PUBLIC_API_BASE_URL":"https://doha-cars.vercel.app","EXPO_PUBLIC_API_KEY":"2df2dbbe1869c719006a4f4af8859fef03c92dd1b7ec1597"}}
+{"_e":"devserver:start","_t":1780927321719,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../../../src/app","serverComponents":false,"serverActions":false,"serverRendering":true,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1780927321970,"serverRoot":"../../..","projectRoot":"../../..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":true,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1780927322413,"atlas":false,"workers":9,"host":"::","port":8081}
+{"_e":"metro:bundling:started","_t":1780927342503,"id":"2","platform":"web","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:started","_t":1780927342504,"id":"3","platform":"web","environment":"node","entry":"node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js"}
+{"_e":"metro:bundling:done","_t":1780927345312,"id":"3","total":925,"ms":2808.340334}
+{"_e":"metro:bundling:done","_t":1780927345640,"id":"2","total":935,"ms":3136.31175}
+{"_e":"metro:bundling:started","_t":1780927431716,"id":"5","platform":"web","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:started","_t":1780927431717,"id":"6","platform":"web","environment":"node","entry":"node_modules/expo/node_modules/@expo/cli/node_modules/@expo/router-server/node/render.js"}
+{"_e":"metro:bundling:done","_t":1780927431735,"id":"6","total":1,"ms":18.313791}
+{"_e":"metro:bundling:done","_t":1780927431831,"id":"5","total":1,"ms":114.5515}
+{"_e":"metro:bundling:started","_t":1780927431840,"id":"7","platform":"web","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:done","_t":1780927433506,"id":"7","total":940,"ms":1665.887875}
+{"_e":"metro:client_log","_t":1780927433638,"level":"info","data":["%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools","font-weight:bold"]}
+{"_e":"metro:client_log","_t":1780927433638,"level":"log","data":["Running application \"main\" with appParams:\n","{\"hydrate\": undefined, \"rootTag\": \"#root\"}","\nDevelopment-level warnings: ON.\nPerformance optimizations: OFF."]}
+{"_e":"root:init","_t":1780927543872,"format":"v0-jsonl","version":"56.1.13"}
+{"_e":"env:mode","_t":1780927543873,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1780927543875,"mode":"development","files":["../../../.env"],"env":{"EXPO_PUBLIC_API_BASE_URL":"https://doha-cars.vercel.app","EXPO_PUBLIC_API_KEY":"2df2dbbe1869c719006a4f4af8859fef03c92dd1b7ec1597"}}
+{"_e":"devserver:start","_t":1780927544091,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../../../src/app","serverComponents":false,"serverActions":false,"serverRendering":true,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1780927544297,"serverRoot":"../../..","projectRoot":"../../..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":true,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1780927544646,"atlas":false,"workers":9,"host":"::","port":8081}
+{"_e":"metro:client_log","_t":1780927647663,"level":"error","data":["Project is incompatible with this version of Expo Go\n\nThis project requires a newer version of Expo Go.\n\nHow to fix this error:\nDownload the latest version of Expo Go from the Play Store."]}
+{"_e":"metro:client_log","_t":1780927703944,"level":"error","data":["Project is incompatible with this version of Expo Go\n\nThis project requires a newer version of Expo Go.\n\nHow to fix this error:\nDownload the latest version of Expo Go from the Play Store."]}
+{"_e":"metro:client_log","_t":1780928060173,"level":"error","data":["Project is incompatible with this version of Expo Go\n\nThis project requires a newer version of Expo Go.\n\nHow to fix this error:\nDownload the latest version of Expo Go from the Play Store."]}
+{"_e":"metro:client_log","_t":1780928063243,"level":"error","data":["Project is incompatible with this version of Expo Go\n\nThis project requires a newer version of Expo Go.\n\nHow to fix this error:\nDownload the latest version of Expo Go from the Play Store."]}
+{"_e":"root:init","_t":1780936450299,"format":"v0-jsonl","version":"56.1.13"}
+{"_e":"env:mode","_t":1780936450299,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1780936450300,"mode":"development","files":["../../../.env"],"env":{"EXPO_PUBLIC_API_BASE_URL":"https://doha-cars.vercel.app","EXPO_PUBLIC_API_KEY":"2df2dbbe1869c719006a4f4af8859fef03c92dd1b7ec1597","SCRAPERAPI_KEY":"8f086fcbb1977a5376e854ba356ca9b9"}}
+{"_e":"devserver:start","_t":1780936450477,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../../../src/app","serverComponents":false,"serverActions":false,"serverRendering":true,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1780936450621,"serverRoot":"../../..","projectRoot":"../../..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":true,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1780936450942,"atlas":false,"workers":9,"host":"::","port":8081}
+{"_e":"root:init","_t":1781515740907,"format":"v0-jsonl","version":"56.1.13"}
+{"_e":"env:mode","_t":1781515740908,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1781515740910,"mode":"development","files":["../../../.env"],"env":{"EXPO_PUBLIC_API_BASE_URL":"https://doha-cars.vercel.app","EXPO_PUBLIC_API_KEY":"2df2dbbe1869c719006a4f4af8859fef03c92dd1b7ec1597","SCRAPERAPI_KEY":"8f086fcbb1977a5376e854ba356ca9b9"}}
+{"_e":"devserver:start","_t":1781515741182,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../../../src/app","serverComponents":false,"serverActions":false,"serverRendering":true,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1781515741470,"serverRoot":"../../..","projectRoot":"../../..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":true,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1781515741940,"atlas":false,"workers":9,"host":"::","port":8081}
+{"_e":"metro:bundling:started","_t":1781516041874,"id":"1","platform":"android","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:done","_t":1781516045155,"id":"1","total":1735,"ms":3281.254208}
+{"_e":"root:init","_t":1781516667933,"format":"v0-jsonl","version":"56.1.13"}
+{"_e":"env:mode","_t":1781516667933,"nodeEnv":"development","babelEnv":"development","mode":"development"}
+{"_e":"env:load","_t":1781516667935,"mode":"development","files":["../../../.env"],"env":{"EXPO_PUBLIC_API_BASE_URL":"https://doha-cars.vercel.app","EXPO_PUBLIC_API_KEY":"2df2dbbe1869c719006a4f4af8859fef03c92dd1b7ec1597","SCRAPERAPI_KEY":"8f086fcbb1977a5376e854ba356ca9b9"}}
+{"_e":"devserver:start","_t":1781516668173,"mode":"development","web":true,"baseUrl":"","asyncRoutes":false,"routerRoot":"../../../src/app","serverComponents":false,"serverActions":false,"serverRendering":true,"apiRoutes":false,"exporting":false}
+{"_e":"metro:config","_t":1781516668382,"serverRoot":"../../..","projectRoot":"../../..","exporting":false,"flags":{"autolinkingModuleResolution":false,"serverActions":false,"serverComponents":false,"reactCompiler":true,"optimizeGraph":false,"treeshaking":false,"logbox":false}}
+{"_e":"metro:instantiate","_t":1781516669065,"atlas":false,"workers":9,"host":"::","port":8081}
+{"_e":"metro:bundling:started","_t":1781516711180,"id":"2","platform":"android","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:done","_t":1781516714718,"id":"2","total":1663,"ms":3538.123833}
+{"_e":"metro:bundling:started","_t":1781516968523,"id":"3","platform":"android","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:done","_t":1781516968557,"id":"3","total":1,"ms":33.514}
+{"_e":"metro:bundling:started","_t":1781516984143,"id":"4","platform":"android","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:done","_t":1781516984179,"id":"4","total":1,"ms":36.564708}

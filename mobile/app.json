@@ -2,6 +2,7 @@
   "expo": {
     "name": "Qatar Cars",
     "slug": "qatar-cars",
+    "owner": "qatar-carss-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -40,6 +41,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a1d9d979-e56b-4af3-a438-398af55b5795"
+      }
     }
   }
 }

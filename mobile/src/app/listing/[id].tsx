@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -12,15 +12,21 @@ import {
 import { Image } from "expo-image";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { getListing, type Listing } from "@/lib/api";
-import { formatKM, formatQAR, listingTitle, sourceLabel } from "@/lib/format";
+import { formatKM, formatQAR, listingTitle, sourceLabel, sourceTag } from "@/lib/format";
+import { fonts, radius, useTheme, type Palette } from "@/lib/theme";
 
 const { width } = Dimensions.get("window");
+const GALLERY_H = width * 0.72;
 
 export default function ListingDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
+  const { c } = useTheme();
+  const s = useMemo(() => makeStyles(c), [c]);
+  const [active, setActive] = useState(0);
 
   const { data: listing, isLoading, isError } = useQuery({
     queryKey: ["listing", id],
@@ -32,73 +38,97 @@ export default function ListingDetailScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator />
+      <View style={s.center}>
+        <ActivityIndicator color={c.brand} />
       </View>
     );
   }
   if (isError || !listing) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.muted}>Listing not found.</Text>
+      <View style={s.center}>
+        <Text style={s.muted}>Listing not found.</Text>
       </View>
     );
   }
 
   const phone = listing.contactPhone;
   const whatsapp = listing.contactWhatsapp;
+  const hasActions = !!(phone || whatsapp);
 
   return (
     <>
       <Stack.Screen options={{ title: sourceLabel(listing.source) }} />
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 110 }}
+        style={s.container}
+        contentContainerStyle={{ paddingBottom: insets.bottom + (hasActions ? 110 : 28) }}
       >
         {listing.images.length > 0 ? (
-          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-            {listing.images.map((uri, i) => (
-              <Image
-                key={`${uri}-${i}`}
-                source={uri}
-                style={{ width, height: width * 0.72 }}
-                contentFit="cover"
-                transition={150}
-              />
-            ))}
-          </ScrollView>
+          <View>
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) =>
+                setActive(Math.round(e.nativeEvent.contentOffset.x / width))
+              }
+            >
+              {listing.images.map((uri, i) => (
+                <Image
+                  key={`${uri}-${i}`}
+                  source={uri}
+                  style={{ width, height: GALLERY_H }}
+                  contentFit="cover"
+                  transition={150}
+                />
+              ))}
+            </ScrollView>
+            <View style={s.sourceTag}>
+              <Text style={s.sourceTagText}>{sourceTag(listing.source)}</Text>
+            </View>
+            {listing.images.length > 1 && (
+              <View style={s.counter}>
+                <Text style={s.counterText}>
+                  {active + 1} / {listing.images.length}
+                </Text>
+              </View>
+            )}
+          </View>
         ) : (
-          <View style={[styles.noImage, { width, height: width * 0.72 }]}>
-            <Text style={styles.muted}>No photos</Text>
+          <View style={[s.noImage, { width, height: GALLERY_H }]}>
+            <Text style={s.muted}>No photos</Text>
           </View>
         )}
 
-        <View style={styles.body}>
-          <Text style={styles.title}>{listingTitle(listing)}</Text>
-          <Text style={styles.price}>{formatQAR(listing.priceQAR)}</Text>
+        <View style={s.body}>
+          <Text style={s.kicker}>{sourceLabel(listing.source)}</Text>
+          <Text style={s.title}>{listingTitle(listing)}</Text>
+          <Text style={s.price}>{formatQAR(listing.priceQAR)}</Text>
 
           {listing.location ? (
-            <Text style={styles.location}>{listing.location}</Text>
+            <View style={s.locationRow}>
+              <MaterialCommunityIcons name="map-marker" size={14} color={c.inkMuted2} />
+              <Text style={s.location}>{listing.location}</Text>
+            </View>
           ) : null}
 
           {specs.length > 0 && (
-            <View style={styles.specGrid}>
-              {specs.map((s) => (
-                <View key={s.label} style={styles.specCell}>
-                  <Text style={styles.specLabel}>{s.label}</Text>
-                  <Text style={styles.specValue}>{s.value}</Text>
+            <View style={s.specGrid}>
+              {specs.map((sp) => (
+                <View key={sp.label} style={s.specCell}>
+                  <Text style={s.specLabel}>{sp.label}</Text>
+                  <Text style={s.specValue}>{sp.value}</Text>
                 </View>
               ))}
             </View>
           )}
 
           {listing.features?.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Features</Text>
-              <View style={styles.featureWrap}>
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Features</Text>
+              <View style={s.featureWrap}>
                 {listing.features.map((f) => (
-                  <View key={f} style={styles.featurePill}>
-                    <Text style={styles.featureText}>{f}</Text>
+                  <View key={f} style={s.featurePill}>
+                    <Text style={s.featureText}>{f}</Text>
                   </View>
                 ))}
               </View>
@@ -106,46 +136,46 @@ export default function ListingDetailScreen() {
           )}
 
           {listing.description ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Description</Text>
-              <Text style={styles.description}>{listing.description}</Text>
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Description</Text>
+              <Text style={s.description}>{listing.description}</Text>
             </View>
           ) : null}
 
           {listing.dealerName ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Seller</Text>
-              <Text style={styles.description}>{listing.dealerName}</Text>
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Seller</Text>
+              <Text style={s.description}>{listing.dealerName}</Text>
             </View>
           ) : null}
 
-          <Pressable
-            style={styles.sourceLink}
-            onPress={() => Linking.openURL(listing.sourceUrl)}
-          >
-            <Text style={styles.sourceLinkText}>
-              View original on {sourceLabel(listing.source)} ↗
-            </Text>
+          <Pressable style={s.sourceLink} onPress={() => Linking.openURL(listing.sourceUrl)}>
+            <Text style={s.sourceLinkText}>View original on {sourceLabel(listing.source)}</Text>
+            <MaterialCommunityIcons name="arrow-top-right" size={14} color={c.brand} />
           </Pressable>
         </View>
       </ScrollView>
 
-      {(phone || whatsapp) && (
-        <View style={[styles.actionBar, { paddingBottom: insets.bottom + 10 }]}>
+      {hasActions && (
+        <View style={[s.actionBar, { paddingBottom: insets.bottom + 12 }]}>
           {phone ? (
             <Pressable
-              style={[styles.actionBtn, styles.callBtn]}
+              style={[s.actionBtn, s.callBtn]}
               onPress={() => Linking.openURL(`tel:${phone}`)}
             >
-              <Text style={styles.actionText}>Call</Text>
+              <MaterialCommunityIcons name="phone" size={18} color={c.bone} />
+              <Text style={s.actionText}>Call</Text>
             </Pressable>
           ) : null}
           {whatsapp ? (
             <Pressable
-              style={[styles.actionBtn, styles.waBtn]}
-              onPress={() => Linking.openURL(`https://wa.me/${whatsapp.replace(/[^0-9]/g, "")}`)}
+              style={[s.actionBtn, s.waBtn]}
+              onPress={() =>
+                Linking.openURL(`https://wa.me/${whatsapp.replace(/[^0-9]/g, "")}`)
+              }
             >
-              <Text style={styles.actionText}>WhatsApp</Text>
+              <MaterialCommunityIcons name="whatsapp" size={18} color="#fff" />
+              <Text style={[s.actionText, { color: "#fff" }]}>WhatsApp</Text>
             </Pressable>
           ) : null}
         </View>
@@ -175,45 +205,118 @@ function buildSpecs(l: Listing): { label: string; value: string }[] {
     .map(([label, v]) => ({ label, value: String(v) }));
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40 },
-  muted: { opacity: 0.6, fontSize: 15 },
-  noImage: { alignItems: "center", justifyContent: "center", backgroundColor: "rgba(127,127,127,0.15)" },
-  body: { padding: 16, gap: 8 },
-  title: { fontSize: 22, fontWeight: "700" },
-  price: { fontSize: 22, fontWeight: "800", color: "#208AEF" },
-  location: { fontSize: 14, opacity: 0.7 },
-  specGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 12, gap: 0 },
-  specCell: { width: "50%", paddingVertical: 8, paddingRight: 8 },
-  specLabel: { fontSize: 12, opacity: 0.55, textTransform: "uppercase", letterSpacing: 0.5 },
-  specValue: { fontSize: 15, fontWeight: "600", marginTop: 2 },
-  section: { marginTop: 18, gap: 8 },
-  sectionTitle: { fontSize: 13, fontWeight: "700", opacity: 0.6, textTransform: "uppercase", letterSpacing: 0.5 },
-  featureWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  featurePill: {
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: "rgba(127,127,127,0.12)",
-  },
-  featureText: { fontSize: 13 },
-  description: { fontSize: 15, lineHeight: 22, opacity: 0.85 },
-  sourceLink: { marginTop: 22 },
-  sourceLinkText: { color: "#208AEF", fontSize: 14, fontWeight: "600" },
-  actionBar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    backgroundColor: "rgba(20,20,20,0.92)",
-  },
-  actionBtn: { flex: 1, paddingVertical: 14, borderRadius: 10, alignItems: "center" },
-  callBtn: { backgroundColor: "#208AEF" },
-  waBtn: { backgroundColor: "#25D366" },
-  actionText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-});
+function makeStyles(c: Palette) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: c.bone },
+    center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, backgroundColor: c.bone },
+    muted: { fontFamily: fonts.body, color: c.inkMuted, fontSize: 15 },
+    noImage: { alignItems: "center", justifyContent: "center", backgroundColor: c.sand },
+    sourceTag: {
+      position: "absolute",
+      top: 12,
+      right: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: c.chipBorder,
+      backgroundColor: c.chipBg,
+    },
+    sourceTagText: {
+      fontFamily: fonts.monoMedium,
+      fontSize: 10,
+      letterSpacing: 1.2,
+      textTransform: "uppercase",
+      color: c.inkMuted,
+    },
+    counter: {
+      position: "absolute",
+      bottom: 12,
+      right: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: radius.pill,
+      backgroundColor: c.scrim,
+    },
+    counterText: { fontFamily: fonts.mono, fontSize: 11, color: "#fff" },
+    body: { padding: 20, gap: 6 },
+    kicker: {
+      fontFamily: fonts.mono,
+      fontSize: 10,
+      letterSpacing: 2,
+      textTransform: "uppercase",
+      color: c.inkMuted,
+    },
+    title: { fontFamily: fonts.displaySemiBold, fontSize: 26, color: c.ink, letterSpacing: -0.5, marginTop: 2 },
+    price: { fontFamily: fonts.displayMedium, fontSize: 24, color: c.brand, marginTop: 4 },
+    locationRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 },
+    location: { fontFamily: fonts.body, fontSize: 14, color: c.inkMuted },
+    specGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      marginTop: 18,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+    },
+    specCell: {
+      width: "50%",
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+    },
+    specLabel: {
+      fontFamily: fonts.mono,
+      fontSize: 10,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      color: c.inkMuted2,
+    },
+    specValue: { fontFamily: fonts.bodyMedium, fontSize: 15, color: c.ink, marginTop: 4 },
+    section: { marginTop: 24, gap: 10 },
+    sectionTitle: {
+      fontFamily: fonts.monoMedium,
+      fontSize: 11,
+      letterSpacing: 1.5,
+      textTransform: "uppercase",
+      color: c.inkMuted,
+    },
+    featureWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    featurePill: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: radius.pill,
+      backgroundColor: c.fill,
+      borderWidth: 1,
+      borderColor: c.chipBorder,
+    },
+    featureText: { fontFamily: fonts.body, fontSize: 13, color: c.ink },
+    description: { fontFamily: fonts.body, fontSize: 15, lineHeight: 23, color: c.inkMuted },
+    sourceLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 28 },
+    sourceLinkText: { fontFamily: fonts.bodyMedium, fontSize: 14, color: c.brand },
+    actionBar: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      flexDirection: "row",
+      gap: 12,
+      paddingHorizontal: 20,
+      paddingTop: 14,
+      backgroundColor: c.paper,
+      borderTopWidth: 1,
+      borderTopColor: c.borderStrong,
+    },
+    actionBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: radius.md,
+    },
+    callBtn: { backgroundColor: c.brand },
+    waBtn: { backgroundColor: "#25D366" },
+    actionText: { fontFamily: fonts.bodySemiBold, fontSize: 15, color: c.bone },
+  });
+}
