@@ -2,13 +2,13 @@
  * Mzad Qatar selector-verification helper.
  *
  * The mzadqatar.com adapter (lib/sources/mzadqatar.ts) was written WITHOUT live
- * HTML because the site is Cloudflare-gated. Run this once SCRAPERAPI_KEY is set
+ * HTML because the site is Cloudflare-gated. Run this once SCRAPPINGBEE_KEY is set
  * to confirm the parser works against the real markup and to eyeball the raw
  * HTML so you can tighten the (currently best-effort) selectors.
  *
  * Usage:
- *   SCRAPERAPI_KEY=... npx tsx scripts/inspect-mzad.ts
- *   SCRAPERAPI_KEY=... npx tsx scripts/inspect-mzad.ts "https://mzadqatar.com/en/products/...--123"
+ *   SCRAPPINGBEE_KEY=... npx tsx scripts/inspect-mzad.ts
+ *   SCRAPPINGBEE_KEY=... npx tsx scripts/inspect-mzad.ts "https://mzadqatar.com/en/products/...--123"
  *
  * It will:
  *   1. Fetch the cars list, report how many product links were parsed, print
@@ -21,7 +21,7 @@
 import "dotenv/config";
 import { writeFileSync } from "node:fs";
 import {
-  fetchViaScraperApi,
+  fetchViaProxy,
   fetchMzadQatarRecent,
   fetchMzadQatarProduct,
   normalizeMzadListing,
@@ -30,8 +30,8 @@ import {
 async function main() {
   const overrideDetailUrl = process.argv[2];
 
-  console.log("=== Fetching cars list via ScraperAPI ===");
-  const listHtml = await fetchViaScraperApi("https://mzadqatar.com/en/cars/sale");
+  console.log("=== Fetching cars list via ScrapingBee ===");
+  const listHtml = await fetchViaProxy("https://mzadqatar.com/en/cars/sale");
   writeFileSync("/tmp/mzad-list.html", listHtml);
   console.log(`Saved raw list HTML to /tmp/mzad-list.html (${listHtml.length} bytes)`);
 
@@ -46,7 +46,7 @@ async function main() {
   }
 
   console.log(`\n=== Fetching detail page: ${detailUrl} ===`);
-  const detailHtml = await fetchViaScraperApi(detailUrl);
+  const detailHtml = await fetchViaProxy(detailUrl);
   writeFileSync("/tmp/mzad-detail.html", detailHtml);
   console.log(`Saved raw detail HTML to /tmp/mzad-detail.html (${detailHtml.length} bytes)`);
 

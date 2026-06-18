@@ -16,9 +16,14 @@ export function isSortValue(v: string | undefined | null): v is SortValue {
   return !!v && SORT_OPTIONS.some((o) => o.value === v);
 }
 
+// "newest"/"oldest" rank by firstSeenAt — when the ad first entered our DB —
+// which is the app's true "recently added" signal and is fair across sources.
+// (sourceUpdatedAt was unfair: the QL scraper re-stamps it to ~now every sync,
+// so QL's ~200 ads flooded the top and buried Qatar Sale + Mzad. firstSeenAt is
+// set once and preserved, so each source interleaves by genuine arrival time.)
 const SORT_TO_ORDER: Record<SortValue, Prisma.ListingOrderByWithRelationInput[]> = {
-  newest: [{ sourceUpdatedAt: { sort: "desc", nulls: "last" } }, { sourceAdIdNum: { sort: "desc", nulls: "last" } }],
-  oldest: [{ sourceUpdatedAt: { sort: "asc", nulls: "last" } }, { sourceAdIdNum: { sort: "asc", nulls: "last" } }],
+  newest: [{ firstSeenAt: "desc" }, { sourceAdIdNum: { sort: "desc", nulls: "last" } }],
+  oldest: [{ firstSeenAt: "asc" }, { sourceAdIdNum: { sort: "asc", nulls: "last" } }],
   price_asc: [{ priceQAR: { sort: "asc", nulls: "last" } }],
   price_desc: [{ priceQAR: { sort: "desc", nulls: "last" } }],
   mileage_asc: [{ mileageKM: { sort: "asc", nulls: "last" } }],

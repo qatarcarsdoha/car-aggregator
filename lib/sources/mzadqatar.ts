@@ -7,15 +7,15 @@
  * mzadqatar.com is fully behind Cloudflare: HTML pages return a managed JS
  * challenge and the JSON API is WAF-hard-blocked. A direct fetch always gets a
  * "Just a moment…" interstitial. So every request here is routed through
- * ScraperAPI, which solves the Cloudflare challenge server-side and returns the
+ * ScrapingBee, which solves the Cloudflare challenge server-side and returns the
  * final rendered HTML. Our code stays a plain fetch -> cheerio parse — no
- * headless browser lives in this repo (it runs on ScraperAPI's infra), so the
+ * headless browser lives in this repo (it runs on ScrapingBee's infra), so the
  * project's "no Playwright" rule still holds.
  *
- * Requires env SCRAPERAPI_KEY (also a GitHub Actions secret).
+ * Requires env SCRAPPINGBEE_KEY (also a GitHub Actions secret).
  *
  * SHAPE (mirrors qatarsale.ts: slim list -> per-listing detail enrichment)
- *   fetchMzadQatarRecent(maxPages)  -> MzadListing[]   (id + detail URL + thumb)
+ *   fetchMzadQatarRecent(maxPages)  -> MzadProduct[]   (id, URL, price, dateMs, …)
  *   fetchMzadQatarProduct(url)      -> MzadProduct|null (full specs/gallery/phone)
  *   normalizeMzadListing(list, det) -> Prisma.ListingCreateInput
  *
@@ -24,24 +24,20 @@
  *   Detail page:        https://mzadqatar.com/en/products/{slug}--{numericId}
  *     The trailing numeric id is the stable per-ad id -> our `sourceAdId`.
  *
- * PARSING STRATEGY — robustness over precision
- *   The site's CSS class names are unknown/unstable and can change without
- *   notice, and Cloudflare can intermittently block even via ScraperAPI. So we
- *   anchor on the things that almost never move:
- *     - List grid: harvest anchors whose href matches the `...--{digits}`
- *       product pattern, dedupe by numeric id. That's the only thing the list
- *       parse really needs — the detail call fills in the real data.
- *     - Detail page: prefer Open Graph meta tags (og:title/og:image/...) and
- *       JSON-LD, which are stable; fall back to a generic label:value spec
- *       scanner for year/mileage/make/etc. Phone comes from tel:/wa.me links.
- *
- * !!! LIVE VERIFICATION NEEDED !!!
- *   These selectors are best-effort and UNVERIFIED — written without live HTML
- *   because the site is Cloudflare-gated. Once SCRAPERAPI_KEY is set, fetch one
- *   real list page and one detail page (see scripts/inspect-mzad.ts usage in the
- *   plan / verification notes), inspect the actual markup, and tighten the
- *   selectors / spec-label map below. All parsing fails soft so a wrong
- *   selector yields nulls, never a thrown sync.
+ * PARSING STRATEGY — parse embedded JSON, not the DOM (VERIFIED LIVE)
+ *   mzad is an Inertia.js app: every page ships its data as an HTML-entity-
+ *   escaped JSON blob that's present even without JS rendering. We parse that —
+ *   far more stable than the JS-rendered grid markup.
+ *     - List page: slice the `products` array on each `{"dateOfAdvertise":` key.
+ *       Each block yields id, title, price, description, thumbnail, the real
+ *       posting epoch (dateOfAdvertise), and partial specs. DOM-anchor scraping
+ *       (parseListPageFromAnchors) remains as a fallback if the JSON disappears.
+ *     - Detail page: specs come from the schema.org JSON-LD Vehicle node — the
+ *       page's `{"dateOfAdvertise"}` blocks are the related-products carousel,
+ *       not this ad. Gallery = upload URLs carrying this ad's id; phone is the
+ *       DOM tel:/wa.me link. Specs are keyed by mzad's stable `filterId`, not
+ *       the misleading display labels ("Motor type" is the brand, etc.).
+ *   All parsing fails soft — a missing field yields null, never a thrown sync.
  */
 
 import type { Prisma } from "@prisma/client";
@@ -49,56 +45,67 @@ import * as cheerio from "cheerio";
 
 const SITE_BASE = "https://mzadqatar.com";
 const CARS_PATH = "/en/cars/sale";
-const SCRAPERAPI_ENDPOINT = "https://api.scraperapi.com/";
+const SCRAPINGBEE_ENDPOINT = "https://app.scrapingbee.com/api/v1/";
 
-// ---------- ScraperAPI fetch ----------
+// ---------- ScrapingBee fetch ----------
 
 /**
- * Fetch a mzadqatar.com URL through ScraperAPI (Cloudflare-solving proxy).
+ * Fetch a mzadqatar.com URL through ScrapingBee (Cloudflare-solving proxy).
  *
- * Starts with `render=true` (JS rendering, 10 credits) which clears most managed
- * challenges. If the response still looks like a Cloudflare interstitial, retry
- * once with `ultra_premium=true` (75 credits) which uses the hardened anti-bot
- * path. `country_code=qa` is free and makes the rendered HTML match a Qatar
- * visitor (mzad may geo-vary).
+ * Tier 1 (cheap, default): `premium_proxy=true` + `country_code=qa` with NO JS
+ * rendering — 10 credits. Verified live against the cars list page: this clears
+ * Cloudflare and returns the full HTML (Qatar geo confirmed via a Doha cf-ray).
+ * Tier 2 (fallback): if the cheap path is challenged or errors, escalate once to
+ * the hardened `stealth_proxy=true` pool with `render_js=true` — 75 credits.
+ *
+ * Geotargeting (`country_code=qa`) requires a premium/stealth proxy, both of
+ * which we use here. Requires env SCRAPPINGBEE_KEY (also a GitHub Actions secret).
  */
-export async function fetchViaScraperApi(targetUrl: string): Promise<string> {
-  const key = process.env.SCRAPERAPI_KEY;
+export async function fetchViaProxy(targetUrl: string): Promise<string> {
+  const key = process.env.SCRAPPINGBEE_KEY ?? process.env.SCRAPINGBEE_KEY;
   if (!key) {
     throw new Error(
-      "SCRAPERAPI_KEY is not set — required to fetch Cloudflare-gated mzadqatar.com"
+      "SCRAPPINGBEE_KEY is not set — required to fetch Cloudflare-gated mzadqatar.com"
     );
   }
 
-  const build = (ultra: boolean) => {
+  const build = (stealth: boolean) => {
     const p = new URLSearchParams({
       api_key: key,
       url: targetUrl,
-      render: "true",
       country_code: "qa",
     });
-    if (ultra) p.set("ultra_premium", "true");
-    return `${SCRAPERAPI_ENDPOINT}?${p.toString()}`;
+    if (stealth) {
+      p.set("stealth_proxy", "true");
+      p.set("render_js", "true");
+    } else {
+      p.set("premium_proxy", "true");
+      p.set("render_js", "false");
+    }
+    return `${SCRAPINGBEE_ENDPOINT}?${p.toString()}`;
   };
 
+  // NOTE: do NOT match `cdn-cgi/challenge` / `challenge-platform` here — Cloudflare
+  // injects that script tag into successfully-served pages too, so it false-positives.
+  // The block interstitial is identified by its title text instead.
   const looksChallenged = (html: string) =>
-    /just a moment|cf-mitigated|challenge-platform|cdn-cgi\/challenge/i.test(html);
+    /just a moment|attention required|cf-mitigated/i.test(html);
 
-  for (const ultra of [false, true]) {
-    const res = await fetch(build(ultra), { cache: "no-store" });
+  for (const stealth of [false, true]) {
+    const res = await fetch(build(stealth), { cache: "no-store" });
     if (!res.ok) {
-      // 403/500 from ScraperAPI itself usually means the proxy couldn't solve
-      // the challenge — escalate to ultra on the next loop iteration.
-      if (!ultra) continue;
+      // Non-200 from ScrapingBee means the proxy couldn't fetch/solve — escalate
+      // to the stealth pool on the next loop iteration.
+      if (!stealth) continue;
       throw new Error(
-        `ScraperAPI returned ${res.status} ${res.statusText} for ${targetUrl}`
+        `ScrapingBee returned ${res.status} ${res.statusText} for ${targetUrl}`
       );
     }
     const html = await res.text();
     if (!looksChallenged(html)) return html;
-    if (ultra) {
+    if (stealth) {
       throw new Error(
-        `Cloudflare challenge not cleared for ${targetUrl} even with ultra_premium`
+        `Cloudflare challenge not cleared for ${targetUrl} even with stealth_proxy`
       );
     }
   }
@@ -125,8 +132,10 @@ export interface MzadProduct extends MzadListing {
   phone?: string | null;
   location?: string | null;
   dealerName?: string | null;
-  /** Raw label:value spec pairs scraped from the detail page. */
+  /** Spec pairs keyed by mzad's stable `filterId` (e.g. "subCategoryId"). */
   specs?: Record<string, string>;
+  /** `dateOfAdvertise` epoch ms — mzad's real posting time (true recency). */
+  dateMs?: number | null;
   /** Snippet of the raw HTML kept in rawData for debugging schema drift. */
   rawHtmlSnippet?: string;
 }
@@ -166,47 +175,123 @@ export function parseMzadId(url: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
+// ---------- Embedded-JSON helpers ----------
+
+/**
+ * mzad is an Inertia.js app: every page embeds its product data as an
+ * HTML-entity-escaped JSON blob (list pages carry a `products` array of full
+ * product objects; detail pages carry one). We parse that JSON instead of the
+ * DOM — the visible grid is JS-rendered, but the JSON is present even without
+ * rendering and is complete and stable.
+ */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&");
+}
+
+/** Read a string field from a JSON product block. */
+function jsonStr(block: string, key: string): string | null {
+  const m = block.match(new RegExp(`"${key}":"((?:[^"\\\\]|\\\\.)*)"`));
+  return m ? nonEmpty(m[1].replace(/\\\//g, "/")) : null;
+}
+
+/** Read a numeric field (quoted or unquoted) from a JSON product block. */
+function jsonNum(block: string, key: string): number | null {
+  const m = block.match(new RegExp(`"${key}":"?(-?\\d+(?:\\.\\d+)?)"?`));
+  return m ? parseIntSafe(m[1]) : null;
+}
+
+/**
+ * Spec pairs from a product's embedded `properties` array, keyed by the stable
+ * machine `filterId` (NOT the display label — mzad's labels mislead: "Motor
+ * type" is the brand, "Class" the model, "Model" the trim).
+ */
+function specsFromBlock(block: string): Record<string, string> {
+  const specs: Record<string, string> = {};
+  for (const m of block.matchAll(/"filterId":"([^"]+)","filterValue":"([^"]*)"/g)) {
+    const fid = m[1];
+    const val = m[2].trim();
+    if (fid && val && !(fid in specs)) specs[fid] = val;
+  }
+  return specs;
+}
+
+/** Detail-page URL from a product id (list JSON leaves `productUrl` empty; mzad
+ *  ignores the slug and routes on the trailing `--{id}`). */
+function detailUrlForId(id: number): string {
+  return `${SITE_BASE}/en/products/car--${id}`;
+}
+
 // ---------- List parsing ----------
 
-function parseListPage(html: string): MzadListing[] {
-  const $ = cheerio.load(html);
-  const byId = new Map<number, MzadListing>();
+/**
+ * Parse the `products` array out of the list page's embedded JSON. Each product
+ * object is delimited by its leading `{"dateOfAdvertise":` key; we slice between
+ * consecutive ones so each block carries exactly that product's fields +
+ * `properties`.
+ */
+function parseListPage(html: string): MzadProduct[] {
+  const decoded = decodeEntities(html);
+  const starts = [...decoded.matchAll(/\{"dateOfAdvertise":/g)].map((m) => m.index ?? -1);
+  const byId = new Map<number, MzadProduct>();
 
-  $('a[href*="/products/"]').each((_, el) => {
-    const href = absoluteUrl($(el).attr("href"));
-    if (!href || !/\/products\//.test(href)) return;
-    const id = parseMzadId(href);
-    if (id == null || byId.has(id)) return;
+  for (let i = 0; i < starts.length; i++) {
+    const block = decoded.slice(starts[i], starts[i + 1] ?? starts[i] + 12000);
+    const id = jsonNum(block, "productId");
+    if (id == null || byId.has(id)) continue;
 
-    // Best-effort card metadata from the anchor's surrounding container.
-    // (Unverified selectors — the detail call fills the authoritative data.)
-    const card = $(el).closest("li, article, div");
-    const img = card.find("img").first();
-    const thumbnail =
-      absoluteUrl(img.attr("data-src") || img.attr("src") || undefined) ?? null;
-    const title =
-      nonEmpty($(el).attr("title")) ??
-      nonEmpty(img.attr("alt")) ??
-      nonEmpty(card.find("h2, h3, .title").first().text());
-    const priceText = card
-      .find('[class*="price"], [class*="amount"]')
-      .first()
-      .text();
-    const priceQAR = parseIntSafe(priceText);
+    const thumbnail = jsonStr(block, "productMainImage");
+    byId.set(id, {
+      id,
+      url: detailUrlForId(id),
+      title: jsonStr(block, "productName"),
+      thumbnail,
+      priceQAR: jsonNum(block, "productPrice") || null, // 0 == "unspecified"
+      description: jsonStr(block, "productDescription"),
+      specs: specsFromBlock(block),
+      images: thumbnail ? [thumbnail] : [],
+      dateMs: jsonNum(block, "dateOfAdvertise"),
+    });
+  }
 
-    byId.set(id, { id, url: href, title, thumbnail, priceQAR });
-  });
-
+  // Fallback to DOM-anchor scraping if the embedded JSON ever disappears.
+  if (byId.size === 0) return parseListPageFromAnchors(html);
   return Array.from(byId.values());
 }
 
-export async function fetchMzadQatarRecent(maxPages = 2): Promise<MzadListing[]> {
-  const all: MzadListing[] = [];
+/** Legacy fallback: harvest `/products/...--{id}` anchors from the DOM. */
+function parseListPageFromAnchors(html: string): MzadProduct[] {
+  const $ = cheerio.load(html);
+  const byId = new Map<number, MzadProduct>();
+  $('a[href*="/products/"]').each((_, el) => {
+    const href = absoluteUrl($(el).attr("href"));
+    if (!href) return;
+    const id = parseMzadId(href);
+    if (id == null || byId.has(id)) return;
+    const img = $(el).closest("li, article, div").find("img").first();
+    byId.set(id, {
+      id,
+      url: href,
+      title: nonEmpty($(el).attr("title")) ?? nonEmpty(img.attr("alt")),
+      thumbnail: absoluteUrl(img.attr("data-src") || img.attr("src") || undefined),
+      priceQAR: null,
+    });
+  });
+  return Array.from(byId.values());
+}
+
+export async function fetchMzadQatarRecent(maxPages = 2): Promise<MzadProduct[]> {
+  const all: MzadProduct[] = [];
   const seen = new Set<number>();
 
   for (let page = 1; page <= maxPages; page++) {
     const url = `${SITE_BASE}${CARS_PATH}${page > 1 ? `?page=${page}` : ""}`;
-    const html = await fetchViaScraperApi(url);
+    const html = await fetchViaProxy(url);
     const listings = parseListPage(html);
     if (listings.length === 0) break; // no more pages (or markup changed)
 
@@ -229,62 +314,71 @@ export async function fetchMzadQatarRecent(maxPages = 2): Promise<MzadListing[]>
 // ---------- Detail parsing ----------
 
 /**
- * Generic label:value spec scanner. Mzad detail pages render a spec list whose
- * exact markup we don't know, so we collect candidate pairs from common
- * structures (definition lists, two-cell rows, label/value spans) and key them
- * by a normalized lowercase label. Keep keys raw — mapping to our columns
- * happens in normalizeMzadListing via SPEC_KEYS.
+ * Read the main product's specs from the page's schema.org JSON-LD. On a detail
+ * page the `{"dateOfAdvertise"}` blocks are the *related-products* carousel
+ * (no specs); the actual ad's structured data lives in a `<script
+ * type="application/ld+json">` Vehicle/Product node. Returns a specs map keyed
+ * by our FILTER_FIELDS scheme so the normalizer treats it like list specs.
  */
-function scrapeSpecs($: cheerio.CheerioAPI): Record<string, string> {
+function specsFromJsonLd(html: string): Record<string, string> {
   const specs: Record<string, string> = {};
-  const put = (label: string, value: string) => {
-    const k = label.trim().toLowerCase().replace(/\s+/g, " ");
-    const v = value.trim();
-    if (k && v && !specs[k]) specs[k] = v;
-  };
-
-  // <dl><dt>Label</dt><dd>Value</dd>
-  $("dl").each((_, dl) => {
-    const dts = $(dl).find("dt");
-    const dds = $(dl).find("dd");
-    dts.each((i, dt) => put($(dt).text(), $(dds[i]).text()));
-  });
-
-  // Two-cell rows: <tr><td>Label</td><td>Value</td></tr> and
-  // <li><span>Label</span><span>Value</span></li> style.
-  $("tr, li, .row, .spec, .detail-row").each((_, row) => {
-    const cells = $(row).children();
-    if (cells.length === 2) {
-      put($(cells[0]).text(), $(cells[1]).text());
+  const scripts = [
+    ...html.matchAll(/<script[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi),
+  ];
+  for (const sc of scripts) {
+    let data: unknown;
+    try {
+      data = JSON.parse(sc[1]);
+    } catch {
+      try {
+        data = JSON.parse(decodeEntities(sc[1]));
+      } catch {
+        continue;
+      }
     }
-  });
-
+    const nodes = Array.isArray(data) ? data : [data];
+    for (const n of nodes as Record<string, unknown>[]) {
+      if (!n || typeof n !== "object") continue;
+      const set = (fid: string, v: unknown) => {
+        const s = v == null ? "" : String(v).trim();
+        if (s && !(fid in specs)) specs[fid] = s;
+      };
+      const brand = n.brand as { name?: string } | undefined;
+      set(FILTER_FIELDS.make, brand?.name);
+      set(FILTER_FIELDS.model, n.model);
+      set(FILTER_FIELDS.year, n.vehicleModelDate);
+      set(FILTER_FIELDS.transmission, n.vehicleTransmission);
+      set(FILTER_FIELDS.fuelType, n.fuelType);
+      set(FILTER_FIELDS.bodyType, n.bodyType);
+      set(FILTER_FIELDS.exteriorColor, n.color);
+      const odo = n.mileageFromOdometer as { value?: number } | undefined;
+      set(FILTER_FIELDS.mileage, odo?.value);
+      const eng = n.vehicleEngine as { engineDisplacement?: { value?: number } } | undefined;
+      const cc = eng?.engineDisplacement?.value;
+      if (cc != null) set(FILTER_FIELDS.engineSize, `${cc} cc`);
+    }
+  }
   return specs;
 }
 
 function parseDetailPage(url: string, html: string): MzadProduct {
+  const decoded = decodeEntities(html);
+  const id = parseMzadId(url) ?? jsonNum(decoded, "productId") ?? 0;
+
+  const specs = specsFromJsonLd(html);
+
+  // Full gallery: high-res uploads whose filename carries THIS id (excludes the
+  // related-products carousel, UI chrome, and low-quality variants).
+  const imgRe = new RegExp(
+    `https://content\\.mzadqatar\\.com/uploads/images/[^"\\\\]*?${id}-[^"\\\\]*?\\.(?:jpe?g|png|webp)`,
+    "g"
+  );
+  const images = [...new Set([...decoded.matchAll(imgRe)].map((m) => m[0]))].filter(
+    (u) => !u.includes("/low_quality/")
+  );
+
+  // Phone still lives in the DOM (a tel:/wa.me link), not the JSON.
   const $ = cheerio.load(html);
-  const id = parseMzadId(url) ?? 0;
-
-  const meta = (prop: string) =>
-    nonEmpty($(`meta[property="${prop}"]`).attr("content")) ??
-    nonEmpty($(`meta[name="${prop}"]`).attr("content"));
-
-  const title = meta("og:title") ?? nonEmpty($("h1").first().text()) ?? nonEmpty($("title").text());
-  const description = meta("og:description") ?? nonEmpty($('meta[name="description"]').attr("content"));
-
-  // Image gallery: all og:image tags + any large content images, deduped.
-  const images = new Set<string>();
-  $('meta[property="og:image"]').each((_, el) => {
-    const u = absoluteUrl($(el).attr("content") || undefined);
-    if (u) images.add(u);
-  });
-  $('[class*="gallery"] img, [class*="slider"] img, .product-image img').each((_, el) => {
-    const u = absoluteUrl($(el).attr("data-src") || $(el).attr("src") || undefined);
-    if (u && !/sprite|logo|icon/i.test(u)) images.add(u);
-  });
-
-  // Phone: tel: link or wa.me / whatsapp link.
   let phone: string | null = null;
   $('a[href^="tel:"]').each((_, el) => {
     phone = phone ?? normalizePhone($(el).attr("href")?.replace(/^tel:/, ""));
@@ -296,63 +390,45 @@ function parseDetailPage(url: string, html: string): MzadProduct {
     });
   }
 
-  const specs = scrapeSpecs($);
-
-  // Price: og price meta, else from specs, else a price-ish element.
-  const priceQAR =
-    parseIntSafe(meta("product:price:amount")) ??
-    parseIntSafe(specs["price"]) ??
-    parseIntSafe($('[class*="price"], [class*="amount"]').first().text());
-
-  const location = nonEmpty(specs["location"]) ?? nonEmpty(specs["city"]) ?? nonEmpty(specs["area"]);
-
   return {
     id,
     url,
-    title,
-    description,
-    priceQAR,
-    images: Array.from(images),
+    images,
     phone,
-    location,
-    dealerName: nonEmpty(specs["seller"]) ?? nonEmpty(specs["advertiser"]) ?? null,
     specs,
-    rawHtmlSnippet: html.slice(0, 4000),
+    rawHtmlSnippet: JSON.stringify({ specs, imageCount: images.length }),
   };
 }
 
 export async function fetchMzadQatarProduct(url: string): Promise<MzadProduct | null> {
-  const html = await fetchViaScraperApi(url);
+  const html = await fetchViaProxy(url);
   return parseDetailPage(url, html);
 }
 
 // ---------- Normalizer ----------
 
 /**
- * Spec-label -> a small extractor. Each key is matched as a substring of the
- * normalized (lowercased) spec label so minor wording differences (and the
- * English half of bilingual labels) still hit. UNVERIFIED — confirm the real
- * labels against a live detail page and adjust.
+ * Our column -> mzad's stable `filterId` key. Verified against live detail/list
+ * JSON. Note mzad's labels are misleading, so we map by filterId, not label:
+ *   subCategoryId="Motor type"=brand, subsubCategoryId="Class"=model,
+ *   subsubsubCategoryId="Model"=trim.
  */
-const SPEC_KEYS = {
-  make: ["make", "brand", "manufacturer"],
-  model: ["model"],
-  year: ["year", "manufacture"],
-  mileage: ["mileage", "kilometer", "kilometre", "km", "odometer"],
-  fuelType: ["fuel"],
-  transmission: ["transmission", "gear"],
-  bodyType: ["body"],
-  cylinders: ["cylinder"],
-  exteriorColor: ["exterior color", "outside color", "color", "colour"],
-  interiorColor: ["interior color", "inside color"],
-  wheelDrive: ["drive", "wheel"],
+const FILTER_FIELDS = {
+  make: "subCategoryId",
+  model: "subsubCategoryId",
+  trim: "subsubsubCategoryId",
+  year: "manfactureYearId",
+  mileage: "km",
+  fuelType: "Fueltype",
+  transmission: "gear",
+  cylinders: "CylinderNumber",
+  engineSize: "Engine_capacity",
+  bodyType: "CartypeID",
+  exteriorColor: "carcolor",
 } as const;
 
-function specValue(specs: Record<string, string>, candidates: readonly string[]): string | null {
-  for (const [label, value] of Object.entries(specs)) {
-    if (candidates.some((c) => label.includes(c))) return nonEmpty(value);
-  }
-  return null;
+function specValue(specs: Record<string, string>, filterId: string): string | null {
+  return nonEmpty(specs[filterId]);
 }
 
 /**
@@ -376,58 +452,68 @@ function parseFromTitle(title: string | null | undefined): {
 }
 
 export function normalizeMzadListing(
-  listItem: MzadListing,
+  listItem: MzadProduct,
   detail?: MzadProduct | null
 ): Prisma.ListingCreateInput {
-  const p: MzadProduct = { ...listItem, ...(detail ?? {}) };
-  const specs = p.specs ?? {};
+  const id = listItem.id;
+  // Detail's JSON-LD specs are authoritative for car attributes; the list's
+  // partial specs (year/mileage) fill any gaps. Detail wins on overlap.
+  const specs = { ...(listItem.specs ?? {}), ...(detail?.specs ?? {}) };
 
-  const fromTitle = parseFromTitle(p.title);
+  // Title/price/description come from the list (clean, complete); detail is fallback.
+  const title = nonEmpty(listItem.title) ?? nonEmpty(detail?.title);
+  const description = nonEmpty(listItem.description) ?? nonEmpty(detail?.description);
+  const priceQAR = listItem.priceQAR ?? detail?.priceQAR ?? null;
+  const dateMs = listItem.dateMs ?? detail?.dateMs ?? null;
 
-  const make = specValue(specs, SPEC_KEYS.make) ?? fromTitle.make;
-  const model = specValue(specs, SPEC_KEYS.model) ?? fromTitle.model;
-  const year = parseIntSafe(specValue(specs, SPEC_KEYS.year)) ?? fromTitle.year;
-  const mileageKM = parseIntSafe(specValue(specs, SPEC_KEYS.mileage));
+  const fromTitle = parseFromTitle(title);
 
+  const make = specValue(specs, FILTER_FIELDS.make) ?? fromTitle.make;
+  const model = specValue(specs, FILTER_FIELDS.model) ?? fromTitle.model;
+  const year = parseIntSafe(specValue(specs, FILTER_FIELDS.year)) ?? fromTitle.year;
+  const mileageKM = parseIntSafe(specValue(specs, FILTER_FIELDS.mileage));
+
+  // Prefer the detail gallery; fall back to the list thumbnail.
   const images: string[] =
-    p.images && p.images.length > 0
-      ? p.images
-      : nonEmpty(p.thumbnail)
-        ? [p.thumbnail!]
+    detail?.images && detail.images.length > 0
+      ? detail.images
+      : nonEmpty(listItem.thumbnail)
+        ? [listItem.thumbnail!]
         : [];
 
-  const phone = normalizePhone(p.phone);
+  const phone = normalizePhone(detail?.phone);
+
+  // mzad's `dateOfAdvertise` (epoch ms) is a real posting time — use it for
+  // recency. The scraper falls back to a synthesized order only when it's absent.
+  const sourceUpdatedAt = dateMs && dateMs > 0 ? new Date(dateMs) : null;
 
   return {
     source: "mzadqatar",
-    sourceAdId: String(p.id),
-    sourceAdIdNum: Number.isFinite(p.id) ? p.id : null,
-    sourceUrl: p.url,
-    // Mzad detail pages show a relative "posted X ago"; we don't have a reliable
-    // absolute timestamp, so leave null and let the scraper synthesize ordering
-    // from list position (same approach as Qatar Living).
-    sourceUpdatedAt: null,
+    sourceAdId: String(id),
+    sourceAdIdNum: Number.isFinite(id) ? id : null,
+    sourceUrl: detail?.url ?? listItem.url,
+    sourceUpdatedAt,
 
-    title: nonEmpty(p.title),
-    description: nonEmpty(p.description),
+    title,
+    description,
 
     make,
     model,
-    trim: null,
+    trim: specValue(specs, FILTER_FIELDS.trim),
     year,
-    priceQAR: p.priceQAR ?? null,
+    priceQAR,
     mileageKM,
-    fuelType: specValue(specs, SPEC_KEYS.fuelType),
-    cylinders: specValue(specs, SPEC_KEYS.cylinders),
-    engineSize: null,
-    transmission: specValue(specs, SPEC_KEYS.transmission),
-    bodyType: specValue(specs, SPEC_KEYS.bodyType),
+    fuelType: specValue(specs, FILTER_FIELDS.fuelType),
+    cylinders: specValue(specs, FILTER_FIELDS.cylinders),
+    engineSize: specValue(specs, FILTER_FIELDS.engineSize),
+    transmission: specValue(specs, FILTER_FIELDS.transmission),
+    bodyType: specValue(specs, FILTER_FIELDS.bodyType),
     doors: null,
     seats: null,
     seatType: null,
-    wheelDrive: specValue(specs, SPEC_KEYS.wheelDrive),
-    exteriorColor: specValue(specs, SPEC_KEYS.exteriorColor),
-    interiorColor: specValue(specs, SPEC_KEYS.interiorColor),
+    wheelDrive: null,
+    exteriorColor: specValue(specs, FILTER_FIELDS.exteriorColor),
+    interiorColor: null,
     imported: null,
     serviceHistory: null,
     insuranceType: null,
@@ -438,13 +524,13 @@ export function normalizeMzadListing(
 
     features: [] as Prisma.InputJsonValue,
 
-    location: nonEmpty(p.location),
-    dealerName: nonEmpty(p.dealerName),
+    location: nonEmpty(detail?.location) ?? nonEmpty(listItem.location),
+    dealerName: nonEmpty(detail?.dealerName) ?? nonEmpty(listItem.dealerName),
     contactPhone: phone,
     contactWhatsapp: phone, // Mzad doesn't distinguish; same number works for both
 
     images: images as Prisma.InputJsonValue,
 
-    rawData: p as unknown as Prisma.InputJsonValue,
+    rawData: { ...listItem, detail: detail ?? null } as unknown as Prisma.InputJsonValue,
   };
 }

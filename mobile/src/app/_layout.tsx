@@ -21,6 +21,7 @@ import {
   GeistMono_500Medium,
 } from "@expo-google-fonts/geist-mono";
 import { fonts, useTheme } from "@/lib/theme";
+import { registerForPushNotificationsAsync } from "@/lib/notifications";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -51,6 +52,11 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded || fontError) SplashScreen.hideAsync().catch(() => {});
   }, [fontsLoaded, fontError]);
+
+  // Register for push notifications once on launch (idempotent server-side).
+  useEffect(() => {
+    registerForPushNotificationsAsync();
+  }, []);
 
   if (!fontsLoaded && !fontError) return null;
 

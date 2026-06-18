@@ -82,6 +82,18 @@ model Listing {
   @@index([isActive, firstSeenAt])
 }
 
+// Expo push tokens registered by the mobile app. No user model — this is a
+// personal 1–2 person app, so a flat list of device tokens is all we need. The
+// scraper reads every row and pushes a "N new cars" summary after a sync that
+// added listings. Tokens that Expo reports as DeviceNotRegistered are deleted.
+model DeviceToken {
+  id         String   @id @default(cuid())
+  token      String   @unique // Expo token, e.g. ExponentPushToken[xxxxxxxx]
+  platform   String? // "android" | "ios"
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @updatedAt
+}
+
 model SyncRun {
   id          String   @id @default(cuid())
   source      String

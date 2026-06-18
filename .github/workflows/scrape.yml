@@ -30,4 +30,6 @@ jobs:
         run: npm run sync
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          SCRAPERAPI_KEY: ${{ secrets.SCRAPERAPI_KEY }}
+          SCRAPPINGBEE_KEY: ${{ secrets.SCRAPPINGBEE_KEY }}
+          # Optional — only needed if you enabled Expo's enhanced push security.
+          EXPO_ACCESS_TOKEN: ${{ secrets.EXPO_ACCESS_TOKEN }}

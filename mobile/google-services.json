@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "288180867264",
+    "project_id": "qatar-cars-5feb4",
+    "storage_bucket": "qatar-cars-5feb4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:288180867264:android:6ecd332d1d24d7e1db5d25",
+        "android_client_info": {
+          "package_name": "com.qatarcars.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCscrBY0vEilSgf9o1s_gnVogNzOU3bZhs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

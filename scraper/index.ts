@@ -24,6 +24,7 @@ import {
   fetchMzadQatarProduct,
   normalizeMzadListing,
 } from "../lib/sources/mzadqatar";
+import { notifyNewListings, type SourceNewCount } from "../lib/notify";
 
 type SourceName = "qatarliving" | "qatarsale" | "mzadqatar";
 
@@ -53,7 +54,7 @@ async function pruneSource(source: SourceName, max: number): Promise<void> {
   console.log(`[${source}] Pruned ${count} oldest rows (keeping ${max})`);
 }
 
-async function syncQatarLiving(): Promise<void> {
+async function syncQatarLiving(): Promise<number> {
   const run = await prisma.syncRun.create({
     data: { source: "qatarliving", status: "running" },
   });
@@ -119,6 +120,7 @@ async function syncQatarLiving(): Promise<void> {
     );
 
     await pruneSource("qatarliving", PRUNE_MAX_PER_SOURCE);
+    return newListings;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[qatarliving] FAILED:`, message);
@@ -138,7 +140,7 @@ async function syncQatarLiving(): Promise<void> {
   }
 }
 
-async function syncQatarSale(): Promise<void> {
+async function syncQatarSale(): Promise<number> {
   const run = await prisma.syncRun.create({
     data: { source: "qatarsale", status: "running" },
   });
@@ -205,6 +207,7 @@ async function syncQatarSale(): Promise<void> {
     );
 
     await pruneSource("qatarsale", PRUNE_MAX_PER_SOURCE);
+    return newListings;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[qatarsale] FAILED:`, message);
@@ -224,7 +227,7 @@ async function syncQatarSale(): Promise<void> {
   }
 }
 
-async function syncMzadQatar(): Promise<void> {
+async function syncMzadQatar(): Promise<number> {
   const run = await prisma.syncRun.create({
     data: { source: "mzadqatar", status: "running" },
   });
@@ -234,9 +237,17 @@ async function syncMzadQatar(): Promise<void> {
   let pagesFetched = 0;
 
   try {
-    // Mzad pages are fetched through ScraperAPI (Cloudflare-solving proxy), so
-    // keep page count low — each page is a paid, slow request.
-    const maxPages = 2;
+    // Each mzad page is a paid ScrapingBee request (~10 credits). At our 30-min
+    // cron the first page (~50 newest ads) reliably covers everything posted
+    // since the last run, so default to a single page; MZAD_MAX_PAGES can bump
+    // it if gaps ever appear.
+    const maxPages = Number(process.env.MZAD_MAX_PAGES ?? 1);
+    // Safety valve: cap paid detail calls per run so a one-off surge (or a first
+    // populate against an empty DB) can't burn an unbounded number of credits in
+    // a single run. New ads beyond the cap are deferred to the next run (they're
+    // still on page 1), so we catch up without ever spiking spend.
+    const maxDetailPerRun = Number(process.env.MZAD_MAX_DETAIL_PER_RUN ?? 60);
+
     const listings = await fetchMzadQatarRecent(maxPages);
     pagesFetched = maxPages;
 
@@ -244,15 +255,56 @@ async function syncMzadQatar(): Promise<void> {
       `[mzadqatar] Fetched ${listings.length} listings — enriching with details`
     );
 
-    // Mzad has no reliable absolute timestamp, so (like Qatar Living) synthesize
-    // a sourceUpdatedAt from batch time minus list position to keep "newest"
-    // ordering stable. The list is already newest-first.
+    // Prefer mzad's real posting time (dateOfAdvertise, carried per listing).
+    // Synthesize a batch-time-minus-position order only as a fallback when it's
+    // missing, to keep "newest" ordering stable.
     const batchStart = Date.now();
     let position = 0;
+    let detailsFetched = 0;
 
     for (const listItem of listings) {
-      // Tolerate per-listing detail failures — fall back to slim list data so a
-      // single bad page (or a Cloudflare hiccup) doesn't kill the whole sync.
+      // Prefer mzad's real posting time (dateOfAdvertise); fall back to a
+      // synthesized list-position order only when it's missing.
+      const sourceUpdatedAt =
+        listItem.dateMs && listItem.dateMs > 0
+          ? new Date(listItem.dateMs)
+          : new Date(batchStart - position);
+      position++;
+
+      // Already enriched on a prior run? mzad ads don't change after posting, so
+      // skip the paid ScrapingBee detail call — just mark it seen/active and
+      // refresh the synthesized ordering. This keeps credit spend on genuinely
+      // new listings only (the detail call is the expensive part).
+      const existing = await prisma.listing.findUnique({
+        where: {
+          source_sourceAdId: {
+            source: "mzadqatar",
+            sourceAdId: String(listItem.id),
+          },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        await prisma.listing.update({
+          where: { id: existing.id },
+          // lastSeenAt auto-updates via @updatedAt; firstSeenAt is preserved.
+          data: { isActive: true, sourceUpdatedAt },
+        });
+        updatedListings++;
+        continue;
+      }
+
+      // New ad — fetch full detail (one paid request). Tolerate per-listing
+      // failures: fall back to slim list data so a single bad page doesn't kill
+      // the whole sync.
+      if (detailsFetched >= maxDetailPerRun) {
+        console.warn(
+          `[mzadqatar] hit detail cap (${maxDetailPerRun}) — deferring ` +
+            `remaining new ads to the next run`
+        );
+        break;
+      }
+      detailsFetched++; // count the credit-spending attempt, success or not
       let detail = null;
       try {
         detail = await fetchMzadQatarProduct(listItem.url);
@@ -266,23 +318,8 @@ async function syncMzadQatar(): Promise<void> {
       await new Promise((r) => setTimeout(r, 300));
 
       const data = normalizeMzadListing(listItem, detail);
-      const sourceUpdatedAt = new Date(batchStart - position);
-      position++;
-
-      const result = await prisma.listing.upsert({
-        where: {
-          source_sourceAdId: {
-            source: "mzadqatar",
-            sourceAdId: String(listItem.id),
-          },
-        },
-        create: { ...data, sourceUpdatedAt },
-        update: { ...data, sourceUpdatedAt, isActive: true },
-      });
-
-      const ageMs = result.lastSeenAt.getTime() - result.firstSeenAt.getTime();
-      if (ageMs < 5000) newListings++;
-      else updatedListings++;
+      await prisma.listing.create({ data: { ...data, sourceUpdatedAt } });
+      newListings++;
     }
 
     await prisma.syncRun.update({
@@ -296,11 +333,16 @@ async function syncMzadQatar(): Promise<void> {
       },
     });
 
+    // Rough credit check against the 250k/month ScrapingBee budget: every
+    // ScrapingBee request (list page + each new-ad detail) is ~10 Tier-1 credits.
+    const estCredits = (pagesFetched + detailsFetched) * 10;
     console.log(
-      `[mzadqatar] Done. New: ${newListings}, Updated: ${updatedListings}`
+      `[mzadqatar] Done. New: ${newListings}, Updated: ${updatedListings}, ` +
+        `detail fetches: ${detailsFetched}, est. ScrapingBee credits: ~${estCredits}`
     );
 
     await pruneSource("mzadqatar", PRUNE_MAX_PER_SOURCE);
+    return newListings;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[mzadqatar] FAILED:`, message);
@@ -323,27 +365,34 @@ async function syncMzadQatar(): Promise<void> {
 async function main() {
   const arg = process.argv[2] as SourceName | undefined;
 
-  const sources: Record<SourceName, () => Promise<void>> = {
+  const sources: Record<SourceName, () => Promise<number>> = {
     qatarliving: syncQatarLiving,
     qatarsale: syncQatarSale,
     mzadqatar: syncMzadQatar,
   };
+
+  // Collect per-source new-listing counts so we can fire ONE summary push after
+  // the whole run, rather than spamming a notification per source.
+  const counts: SourceNewCount[] = [];
 
   if (arg) {
     if (!sources[arg]) {
       console.error(`Unknown source: ${arg}`);
       process.exit(1);
     }
-    await sources[arg]();
+    counts.push({ source: arg, newListings: await sources[arg]() });
   } else {
     for (const name of Object.keys(sources) as SourceName[]) {
       try {
-        await sources[name]();
+        counts.push({ source: name, newListings: await sources[name]() });
       } catch (err) {
         console.error(`[${name}] sync failed but continuing:`, err);
       }
     }
   }
+
+  // Best-effort: notify registered devices when this run added listings.
+  await notifyNewListings(counts);
 
   await prisma.$disconnect();
 }
