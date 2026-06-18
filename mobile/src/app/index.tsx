@@ -13,7 +13,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getListings, getMeta, type Listing } from "@/lib/api";
-import { SORT_OPTIONS, SORT_SHORT, type SortValue } from "@/lib/format";
+import {
+  SORT_OPTIONS,
+  SORT_SHORT,
+  buildYearOptions,
+  yearValueToRange,
+  yearTriggerLabel,
+  type SortValue,
+} from "@/lib/format";
 import { ListingCard } from "@/components/listing-card";
 import { FilterDropdown } from "@/components/filter-dropdown";
 import { fonts, radius, useTheme, type Palette } from "@/lib/theme";
@@ -31,6 +38,11 @@ export default function FeedScreen() {
   const [sort, setSort] = useState<SortValue>("newest");
   const [make, setMake] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
+  const [year, setYear] = useState<string | null>(null);
+
+  const currentYear = useMemo(() => new Date().getFullYear(), []);
+  const yearOptions = useMemo(() => buildYearOptions(currentYear), [currentYear]);
+  const { minYear, maxYear } = useMemo(() => yearValueToRange(year), [year]);
 
   const { data: meta } = useQuery({
     queryKey: ["meta", make],
@@ -47,9 +59,9 @@ export default function FeedScreen() {
     refetch,
     isRefetching,
   } = useInfiniteQuery({
-    queryKey: ["listings", { q, sort, make, model }],
+    queryKey: ["listings", { q, sort, make, model, year }],
     queryFn: ({ pageParam }) =>
-      getListings({ page: pageParam, perPage: PER_PAGE, sort, make, model, q }),
+      getListings({ page: pageParam, perPage: PER_PAGE, sort, make, model, q, minYear, maxYear }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
@@ -123,6 +135,17 @@ export default function FeedScreen() {
               ...(meta?.models ?? []).map((m) => ({ value: m, label: m })),
             ]}
             onSelect={(v) => setModel(v === ALL ? null : v)}
+          />
+        </View>
+
+        <View style={s.filterRow}>
+          <FilterDropdown
+            title="Year"
+            triggerLabel={yearTriggerLabel(year)}
+            active={!!year}
+            selected={year ?? ALL}
+            options={[{ value: ALL, label: "All years" }, ...yearOptions]}
+            onSelect={(v) => setYear(v === ALL ? null : v)}
           />
           <FilterDropdown
             title="Sort by"

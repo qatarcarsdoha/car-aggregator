@@ -7,6 +7,8 @@
  *   make   — exact make filter (case-insensitive)
  *   model  — exact model filter (case-insensitive)
  *   q      — free-text search
+ *   minYear — inclusive lower bound on model year
+ *   maxYear — inclusive upper bound on model year
  *   perPage — page size (default 20, capped at 50)
  *
  * Returns { items, total, page, perPage, totalPages }.
@@ -21,6 +23,12 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_PER_PAGE = 20;
 const MAX_PER_PAGE = 50;
+
+/** Parse a year query param to a positive int, or null if absent/invalid. */
+function parseYear(raw: string | null): number | null {
+  const n = parseInt(raw ?? "", 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 export function OPTIONS() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -42,8 +50,10 @@ export async function GET(req: Request) {
   const make = searchParams.get("make")?.trim() || null;
   const model = searchParams.get("model")?.trim() || null;
   const q = searchParams.get("q")?.trim() || null;
+  const minYear = parseYear(searchParams.get("minYear"));
+  const maxYear = parseYear(searchParams.get("maxYear"));
 
-  const where = buildListingWhere({ make, model, q });
+  const where = buildListingWhere({ make, model, q, minYear, maxYear });
 
   const [total, items] = await Promise.all([
     prisma.listing.count({ where }),

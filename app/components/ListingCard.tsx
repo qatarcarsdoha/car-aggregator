@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Sparkles, MapPin, Gauge, Fuel, Calendar } from "lucide-react";
 import type { Listing } from "@prisma/client";
-import { formatQAR, formatKM, formatRelative } from "@/lib/utils";
+import { formatQAR, formatKM, formatRelative, sourceTag } from "@/lib/utils";
 import { toFeedThumbnail } from "@/lib/images";
 import { CardCarousel } from "./CardCarousel";
 
@@ -30,7 +30,7 @@ export function ListingCard({
         )}
       </div>
       <span className="absolute top-3 right-3 chip z-10">
-        {l.source === "qatarliving" ? "QL" : "QS"}
+        {sourceTag(l.source)}
       </span>
       <div className="absolute bottom-0 inset-x-0 p-3 bg-gradient-to-t from-ink/80 via-ink/30 to-transparent pointer-events-none">
         <p className="font-display text-xl text-bone tracking-tight drop-shadow">

@@ -126,3 +126,10 @@
 {"_e":"metro:bundling:done","_t":1781797444229,"id":"3","total":1,"ms":49.902208}
 {"_e":"metro:client_log","_t":1781797445903,"level":"warn","data":["[notifications] Native push module not in this build — skipping. Rebuild the dev client to enable notifications."]}
 {"_e":"metro:client_log","_t":1781800213603,"level":"warn","data":["[notifications] Native push module not in this build — skipping. Rebuild the dev client to enable notifications."]}
+{"_e":"metro:server_log","_t":1781800974013,"level":"error","data":["[timeout] connection terminated with Device for app='%s' on device='%s' after not responding for %s seconds.","com.qatarcars.app","SM-S938B - 16 - API 36","60"]}
+{"_e":"metro:bundling:started","_t":1781801197736,"id":"4","platform":"android","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:done","_t":1781801197772,"id":"4","total":1,"ms":35.637458}
+{"_e":"metro:client_log","_t":1781801199359,"level":"warn","data":["[notifications] Native push module not in this build — skipping. Rebuild the dev client to enable notifications."]}
+{"_e":"metro:bundling:started","_t":1781802158618,"id":"5","platform":"android","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:done","_t":1781802159173,"id":"5","total":1,"ms":554.792042}
+{"_e":"metro:client_log","_t":1781802161005,"level":"warn","data":["[notifications] Native push module not in this build — skipping. Rebuild the dev client to enable notifications."]}

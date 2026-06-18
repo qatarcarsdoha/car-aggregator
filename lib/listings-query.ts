@@ -41,16 +41,22 @@ export function listingOrderBy(sort: SortValue): Prisma.ListingOrderByWithRelati
  * model, trim, title (often holds variant + descriptor), body type, exterior
  * color, fuel, location, dealer name, and the descriptive blob. Year is matched
  * too if the query parses as a 4-digit number. `make`/`model` are exact
- * (case-insensitive) filters fed by the dropdowns.
+ * (case-insensitive) filters fed by the dropdowns. `minYear`/`maxYear` bound the
+ * model year (inclusive): the year dropdown sends min==max for a single year, or
+ * maxYear only for the "& earlier" catch-all bucket.
  */
 export function buildListingWhere({
   make,
   model,
   q,
+  minYear,
+  maxYear,
 }: {
   make?: string | null;
   model?: string | null;
   q?: string | null;
+  minYear?: number | null;
+  maxYear?: number | null;
 }): Prisma.ListingWhereInput {
   const qYear = q && /^\d{4}$/.test(q) ? parseInt(q, 10) : null;
   const searchFilter: Prisma.ListingWhereInput | null = q
@@ -71,10 +77,21 @@ export function buildListingWhere({
       }
     : null;
 
+  const yearFilter =
+    minYear != null || maxYear != null
+      ? {
+          year: {
+            ...(minYear != null ? { gte: minYear } : {}),
+            ...(maxYear != null ? { lte: maxYear } : {}),
+          },
+        }
+      : null;
+
   return {
     isActive: true,
     ...(make ? { make: { equals: make, mode: "insensitive" } } : {}),
     ...(model ? { model: { equals: model, mode: "insensitive" } } : {}),
+    ...(yearFilter ?? {}),
     ...(searchFilter ?? {}),
   };
 }

@@ -21,7 +21,7 @@ import {
   Car,
 } from "lucide-react";
 import { prisma } from "@/lib/db";
-import { formatQAR, formatKM, formatRelative } from "@/lib/utils";
+import { formatQAR, formatKM, formatRelative, sourceLabel } from "@/lib/utils";
 import { GalleryDialog } from "@/app/components/GalleryDialog";
 import { ModeToggle } from "@/components/mode-toggle";
 
@@ -124,7 +124,7 @@ export default async function ListingDetail({
           <div className="px-5 sm:px-8 md:px-0 py-6 md:pt-0 border-b border-ink/10 md:border-b-0">
             <div className="flex flex-wrap items-center gap-2 mb-3">
               <span className="chip">
-                {listing.source === "qatarliving" ? "Qatar Living" : "Qatar Sale"}
+                {sourceLabel(listing.source)}
               </span>
               {listing.location && (
                 <span className="chip">

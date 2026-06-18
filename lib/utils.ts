@@ -19,6 +19,34 @@ export function stripHtml(html: string | null | undefined): string {
     .trim();
 }
 
+/** Full source name for headings (mirrors mobile format.ts sourceLabel). */
+export function sourceLabel(source: string): string {
+  switch (source) {
+    case "qatarliving":
+      return "Qatar Living";
+    case "qatarsale":
+      return "Qatar Sale";
+    case "mzadqatar":
+      return "Mzad Qatar";
+    default:
+      return source;
+  }
+}
+
+/** Short corner-chip tag (mirrors mobile format.ts sourceTag): QL / QS / MZ. */
+export function sourceTag(source: string): string {
+  switch (source) {
+    case "qatarliving":
+      return "QL";
+    case "qatarsale":
+      return "QS";
+    case "mzadqatar":
+      return "MZ";
+    default:
+      return source.slice(0, 2).toUpperCase();
+  }
+}
+
 export function formatQAR(price: number | null | undefined): string {
   if (price == null) return "Price on request";
   return `QAR ${price.toLocaleString("en-US")}`;

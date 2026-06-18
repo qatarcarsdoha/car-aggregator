@@ -24,6 +24,45 @@ export const SORT_SHORT: Record<SortValue, string> = {
 
 export type SortValue = (typeof SORT_OPTIONS)[number]["value"];
 
+/**
+ * Year filter. The dropdown lists real years from the current year down to
+ * YEAR_FLOOR, then a single "& earlier" bucket that catches YEAR_FLOOR and
+ * anything older. Selecting a real year filters to exactly that year; the
+ * bucket filters to <= YEAR_FLOOR.
+ */
+export const YEAR_FLOOR = 2015;
+
+/** Build year dropdown options (newest first), excluding the leading "All". */
+export function buildYearOptions(
+  currentYear: number
+): { value: string; label: string }[] {
+  const opts: { value: string; label: string }[] = [];
+  for (let y = currentYear; y > YEAR_FLOOR; y--) {
+    opts.push({ value: String(y), label: String(y) });
+  }
+  // Trailing "-" marks the catch-all bucket, e.g. "2015-" → <= 2015.
+  opts.push({ value: `${YEAR_FLOOR}-`, label: `${YEAR_FLOOR} & earlier` });
+  return opts;
+}
+
+/** Translate a selected year option value into an inclusive {minYear, maxYear}. */
+export function yearValueToRange(value: string | null): {
+  minYear: number | null;
+  maxYear: number | null;
+} {
+  if (!value) return { minYear: null, maxYear: null };
+  if (value.endsWith("-")) return { minYear: null, maxYear: parseInt(value, 10) };
+  const y = parseInt(value, 10);
+  return { minYear: y, maxYear: y };
+}
+
+/** Compact label for the year trigger pill (the sheet shows the full label). */
+export function yearTriggerLabel(value: string | null): string {
+  if (!value) return "Year";
+  if (value.endsWith("-")) return `≤ ${parseInt(value, 10)}`;
+  return value;
+}
+
 export function formatQAR(price: number | null | undefined): string {
   if (price == null) return "Price on request";
   return `QAR ${price.toLocaleString("en-US")}`;
