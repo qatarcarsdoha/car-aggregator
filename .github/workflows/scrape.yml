@@ -6,6 +6,12 @@ on:
     - cron: "8,23,38,53 * * * *"
   workflow_dispatch:
 
+# If a run is already going (e.g. cron-job.org and the app button fire close
+# together), don't start a second overlapping sync — let the in-flight one finish.
+concurrency:
+  group: sync
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest

@@ -133,3 +133,6 @@
 {"_e":"metro:bundling:started","_t":1781802158618,"id":"5","platform":"android","environment":null,"entry":"node_modules/expo-router/entry.js"}
 {"_e":"metro:bundling:done","_t":1781802159173,"id":"5","total":1,"ms":554.792042}
 {"_e":"metro:client_log","_t":1781802161005,"level":"warn","data":["[notifications] Native push module not in this build — skipping. Rebuild the dev client to enable notifications."]}
+{"_e":"metro:bundling:started","_t":1781803750202,"id":"6","platform":"android","environment":null,"entry":"node_modules/expo-router/entry.js"}
+{"_e":"metro:bundling:done","_t":1781803750234,"id":"6","total":1,"ms":31.963667}
+{"_e":"metro:client_log","_t":1781803751868,"level":"warn","data":["[notifications] Native push module not in this build — skipping. Rebuild the dev client to enable notifications."]}
