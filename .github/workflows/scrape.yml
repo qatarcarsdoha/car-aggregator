@@ -1,9 +1,10 @@
 name: Sync Car Listings
 
 on:
-  schedule:
-    # Every 15 minutes, offset off the :00/:15/:30/:45 peak slots that GitHub drops under load
-    - cron: "8,23,38,53 * * * *"
+  # Triggered on demand only — via workflow_dispatch. The reliable hourly
+  # heartbeat now comes from cron-job.org hitting /api/sync (the app's "Sync now"
+  # button hits the same route). GitHub's own `schedule:` trigger was removed
+  # because it fired hours late under load; that's the whole reason for the switch.
   workflow_dispatch:
 
 # If a run is already going (e.g. cron-job.org and the app button fire close

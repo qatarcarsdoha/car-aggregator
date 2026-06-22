@@ -9,6 +9,7 @@
  *   q      — free-text search
  *   minYear — inclusive lower bound on model year
  *   maxYear — inclusive upper bound on model year
+ *   source  — exact source filter ("qatarliving" | "qatarsale" | "mzadqatar")
  *   perPage — page size (default 20, capped at 50)
  *
  * Returns { items, total, page, perPage, totalPages }.
@@ -23,6 +24,8 @@ export const dynamic = "force-dynamic";
 
 const DEFAULT_PER_PAGE = 20;
 const MAX_PER_PAGE = 50;
+
+const KNOWN_SOURCES = new Set(["qatarliving", "qatarsale", "mzadqatar"]);
 
 /** Parse a year query param to a positive int, or null if absent/invalid. */
 function parseYear(raw: string | null): number | null {
@@ -52,8 +55,10 @@ export async function GET(req: Request) {
   const q = searchParams.get("q")?.trim() || null;
   const minYear = parseYear(searchParams.get("minYear"));
   const maxYear = parseYear(searchParams.get("maxYear"));
+  const sourceParam = searchParams.get("source")?.trim() || null;
+  const source = sourceParam && KNOWN_SOURCES.has(sourceParam) ? sourceParam : null;
 
-  const where = buildListingWhere({ make, model, q, minYear, maxYear });
+  const where = buildListingWhere({ make, model, q, minYear, maxYear, source });
 
   const [total, items] = await Promise.all([
     prisma.listing.count({ where }),

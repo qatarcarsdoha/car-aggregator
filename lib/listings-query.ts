@@ -42,8 +42,9 @@ export function listingOrderBy(sort: SortValue): Prisma.ListingOrderByWithRelati
  * color, fuel, location, dealer name, and the descriptive blob. Year is matched
  * too if the query parses as a 4-digit number. `make`/`model` are exact
  * (case-insensitive) filters fed by the dropdowns. `minYear`/`maxYear` bound the
- * model year (inclusive): the year dropdown sends min==max for a single year, or
- * maxYear only for the "& earlier" catch-all bucket.
+ * model year (inclusive): the year dropdown sends a `minYear` floor for its
+ * "last N years" recency buckets. `source` is an exact filter on the listing
+ * origin ("qatarliving" | "qatarsale" | "mzadqatar").
  */
 export function buildListingWhere({
   make,
@@ -51,12 +52,14 @@ export function buildListingWhere({
   q,
   minYear,
   maxYear,
+  source,
 }: {
   make?: string | null;
   model?: string | null;
   q?: string | null;
   minYear?: number | null;
   maxYear?: number | null;
+  source?: string | null;
 }): Prisma.ListingWhereInput {
   const qYear = q && /^\d{4}$/.test(q) ? parseInt(q, 10) : null;
   const searchFilter: Prisma.ListingWhereInput | null = q
@@ -91,6 +94,7 @@ export function buildListingWhere({
     isActive: true,
     ...(make ? { make: { equals: make, mode: "insensitive" } } : {}),
     ...(model ? { model: { equals: model, mode: "insensitive" } } : {}),
+    ...(source ? { source } : {}),
     ...(yearFilter ?? {}),
     ...(searchFilter ?? {}),
   };
