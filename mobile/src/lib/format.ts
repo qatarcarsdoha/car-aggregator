@@ -25,43 +25,51 @@ export const SORT_SHORT: Record<SortValue, string> = {
 export type SortValue = (typeof SORT_OPTIONS)[number]["value"];
 
 /**
- * Year filter. The dropdown lists real years from the current year down to
- * YEAR_FLOOR, then a single "& earlier" bucket that catches YEAR_FLOOR and
- * anything older. Selecting a real year filters to exactly that year; the
- * bucket filters to <= YEAR_FLOOR.
+ * Year filter — coarse recency buckets instead of a per-year list. Each option
+ * is a "last N years" window that sets a lower bound on the model year
+ * (minYear = currentYear − N); there's no upper bound. The value is encoded as
+ * "<N>y" (e.g. "5y") so the range can be derived against the current year.
  */
-export const YEAR_FLOOR = 2015;
+export const YEAR_BUCKETS = [
+  { value: "5y", years: 5, label: "Last 5 years" },
+  { value: "10y", years: 10, label: "Last 10 years" },
+  { value: "15y", years: 15, label: "Last 15 years or more" },
+] as const;
 
-/** Build year dropdown options (newest first), excluding the leading "All". */
+/** Build year dropdown options, excluding the leading "All". */
 export function buildYearOptions(
-  currentYear: number
+  _currentYear: number
 ): { value: string; label: string }[] {
-  const opts: { value: string; label: string }[] = [];
-  for (let y = currentYear; y > YEAR_FLOOR; y--) {
-    opts.push({ value: String(y), label: String(y) });
-  }
-  // Trailing "-" marks the catch-all bucket, e.g. "2015-" → <= 2015.
-  opts.push({ value: `${YEAR_FLOOR}-`, label: `${YEAR_FLOOR} & earlier` });
-  return opts;
+  return YEAR_BUCKETS.map((b) => ({ value: b.value, label: b.label }));
 }
 
-/** Translate a selected year option value into an inclusive {minYear, maxYear}. */
-export function yearValueToRange(value: string | null): {
-  minYear: number | null;
-  maxYear: number | null;
-} {
+/**
+ * Translate a selected year bucket into a {minYear, maxYear}. "Last N years"
+ * sets minYear = currentYear − N with no upper bound; null means "All years".
+ */
+export function yearValueToRange(
+  value: string | null,
+  currentYear: number
+): { minYear: number | null; maxYear: number | null } {
   if (!value) return { minYear: null, maxYear: null };
-  if (value.endsWith("-")) return { minYear: null, maxYear: parseInt(value, 10) };
-  const y = parseInt(value, 10);
-  return { minYear: y, maxYear: y };
+  const bucket = YEAR_BUCKETS.find((b) => b.value === value);
+  if (!bucket) return { minYear: null, maxYear: null };
+  return { minYear: currentYear - bucket.years, maxYear: null };
 }
 
 /** Compact label for the year trigger pill (the sheet shows the full label). */
 export function yearTriggerLabel(value: string | null): string {
   if (!value) return "Year";
-  if (value.endsWith("-")) return `≤ ${parseInt(value, 10)}`;
-  return value;
+  const bucket = YEAR_BUCKETS.find((b) => b.value === value);
+  return bucket ? `${bucket.years} yrs${bucket.years === 15 ? "+" : ""}` : "Year";
 }
+
+/** Source filter options — exact match on the listing origin. */
+export const SOURCE_OPTIONS = [
+  { value: "qatarliving", label: "Qatar Living" },
+  { value: "qatarsale", label: "Qatar Sale" },
+  { value: "mzadqatar", label: "Mzad Qatar" },
+] as const;
 
 export function formatQAR(price: number | null | undefined): string {
   if (price == null) return "Price on request";

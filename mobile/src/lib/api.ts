@@ -72,6 +72,7 @@ export interface ListingsParams {
   q?: string | null;
   minYear?: number | null;
   maxYear?: number | null;
+  source?: string | null;
 }
 
 async function apiGet<T>(path: string, params?: Record<string, string | number | null | undefined>): Promise<T> {
@@ -102,6 +103,7 @@ export function getListings(params: ListingsParams = {}): Promise<ListingsPage> 
     q: params.q,
     minYear: params.minYear,
     maxYear: params.maxYear,
+    source: params.source,
   });
 }
 

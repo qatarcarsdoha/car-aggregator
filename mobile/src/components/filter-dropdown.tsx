@@ -116,12 +116,12 @@ export function FilterDropdown({
 function makeStyles(c: Palette) {
   return StyleSheet.create({
     trigger: {
-      flex: 1,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
-      gap: 4,
-      height: 38,
+      gap: 6,
+      height: 40,
+      minWidth: 88,
       paddingHorizontal: 14,
       borderRadius: radius.pill,
       backgroundColor: c.paper,
@@ -131,7 +131,7 @@ function makeStyles(c: Palette) {
     triggerActive: { backgroundColor: c.brand, borderColor: c.brand },
     triggerDisabled: { opacity: 0.45 },
     triggerText: {
-      flex: 1,
+      maxWidth: 130,
       fontFamily: fonts.monoMedium,
       fontSize: 11,
       letterSpacing: 0.8,

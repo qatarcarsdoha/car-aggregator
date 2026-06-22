@@ -4,6 +4,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -16,9 +17,11 @@ import { getListings, getMeta, type Listing } from "@/lib/api";
 import {
   SORT_OPTIONS,
   SORT_SHORT,
+  SOURCE_OPTIONS,
   buildYearOptions,
   yearValueToRange,
   yearTriggerLabel,
+  sourceLabel,
   type SortValue,
 } from "@/lib/format";
 import { ListingCard } from "@/components/listing-card";
@@ -39,10 +42,14 @@ export default function FeedScreen() {
   const [make, setMake] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [year, setYear] = useState<string | null>(null);
+  const [source, setSource] = useState<string | null>(null);
 
   const currentYear = useMemo(() => new Date().getFullYear(), []);
   const yearOptions = useMemo(() => buildYearOptions(currentYear), [currentYear]);
-  const { minYear, maxYear } = useMemo(() => yearValueToRange(year), [year]);
+  const { minYear, maxYear } = useMemo(
+    () => yearValueToRange(year, currentYear),
+    [year, currentYear]
+  );
 
   const { data: meta } = useQuery({
     queryKey: ["meta", make],
@@ -59,9 +66,9 @@ export default function FeedScreen() {
     refetch,
     isRefetching,
   } = useInfiniteQuery({
-    queryKey: ["listings", { q, sort, make, model, year }],
+    queryKey: ["listings", { q, sort, make, model, year, source }],
     queryFn: ({ pageParam }) =>
-      getListings({ page: pageParam, perPage: PER_PAGE, sort, make, model, q, minYear, maxYear }),
+      getListings({ page: pageParam, perPage: PER_PAGE, sort, make, model, q, minYear, maxYear, source }),
     initialPageParam: 1,
     getNextPageParam: (lastPage) =>
       lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
@@ -112,7 +119,12 @@ export default function FeedScreen() {
           )}
         </View>
 
-        <View style={s.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={s.filterScroll}
+          contentContainerStyle={s.filterScrollContent}
+        >
           <FilterDropdown
             title="Make"
             triggerLabel={make ?? "Make"}
@@ -136,9 +148,6 @@ export default function FeedScreen() {
             ]}
             onSelect={(v) => setModel(v === ALL ? null : v)}
           />
-        </View>
-
-        <View style={s.filterRow}>
           <FilterDropdown
             title="Year"
             triggerLabel={yearTriggerLabel(year)}
@@ -148,6 +157,17 @@ export default function FeedScreen() {
             onSelect={(v) => setYear(v === ALL ? null : v)}
           />
           <FilterDropdown
+            title="Source"
+            triggerLabel={source ? sourceLabel(source) : "Source"}
+            active={!!source}
+            selected={source ?? ALL}
+            options={[
+              { value: ALL, label: "All sources" },
+              ...SOURCE_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+            ]}
+            onSelect={(v) => setSource(v === ALL ? null : v)}
+          />
+          <FilterDropdown
             title="Sort by"
             triggerLabel={SORT_SHORT[sort]}
             active={sort !== "newest"}
@@ -155,7 +175,7 @@ export default function FeedScreen() {
             options={SORT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
             onSelect={(v) => setSort(v as SortValue)}
           />
-        </View>
+        </ScrollView>
       </View>
 
       {isLoading ? (
@@ -241,7 +261,11 @@ function makeStyles(c: Palette) {
       borderColor: c.borderStrong,
     },
     search: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: c.ink, paddingVertical: 0 },
-    filterRow: { flexDirection: "row", gap: 8 },
+    // Bleed the strip to the screen edges (cancel the header's 16px padding) so
+    // pills scroll fully edge-to-edge, but re-pad the content so the first pill
+    // still lines up with the header and the last clears the right edge.
+    filterScroll: { marginHorizontal: -16 },
+    filterScrollContent: { paddingHorizontal: 16, gap: 8 },
     center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 40, gap: 14 },
     muted: { fontFamily: fonts.body, color: c.inkMuted, fontSize: 15 },
     retry: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: radius.sm, backgroundColor: c.brand },
