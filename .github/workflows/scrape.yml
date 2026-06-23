@@ -28,13 +28,33 @@ jobs:
 
       - run: npm ci
 
-      - name: Sync DB schema (also generates client)
-        run: npx prisma db push
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      # Generate the Prisma client only — NO `prisma db push` here. `generate`
+      # reads the schema locally and never connects to the DB, so it can't fail
+      # on Neon's cold start. Schema changes are pushed manually on deploy (see
+      # CLAUDE.md "Deploying"), not on every sync.
+      - name: Generate Prisma client
+        run: npx prisma generate
 
-      - name: Run sync
-        run: npm run sync
+      # Retry the sync to absorb Neon cold starts. On the hourly cadence the DB
+      # auto-suspends between runs, so the first connection can lose the race
+      # against Neon's wake (P1001). A failed attempt fails fast at connect time,
+      # before any scraping work, so retrying is cheap — by attempt 2 the endpoint
+      # is awake. 3 tries, 15s apart.
+      - name: Run sync (retry for Neon cold starts)
+        run: |
+          for attempt in 1 2 3; do
+            echo "::group::Sync attempt $attempt"
+            if npm run sync; then
+              echo "::endgroup::"
+              echo "Sync succeeded on attempt $attempt"
+              exit 0
+            fi
+            echo "::endgroup::"
+            echo "Attempt $attempt failed — waiting 15s for Neon to wake…"
+            sleep 15
+          done
+          echo "All 3 sync attempts failed"
+          exit 1
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           SCRAPPINGBEE_KEY: ${{ secrets.SCRAPPINGBEE_KEY }}

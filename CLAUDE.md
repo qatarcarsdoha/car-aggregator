@@ -29,6 +29,27 @@ loop is: `npm run sync` to refresh data, `npm run dev` to view it. Cron in
 - Mobile feed (`app/page.tsx`) with sort + pagination, detail page
   (`app/listing/[id]/page.tsx`), Tailwind v4 + shadcn/ui plumbing.
 
+## Deploying & schema changes — READ BEFORE SHIPPING
+
+**The sync cron no longer runs `prisma db push`.** It was removed from
+`.github/workflows/scrape.yml` because the DB (Neon serverless Postgres)
+auto-suspends between hourly runs, and the direct connection `db push` opens
+would intermittently fail on Neon's cold start (`P1001: Can't reach database
+server`). The cron now only runs `prisma generate` (no DB connection) and
+retries `npm run sync` to ride out the cold start.
+
+**Consequence:** schema changes are NOT applied automatically anymore. Any time
+you edit `prisma/schema.prisma`, you MUST push it manually to each environment
+before the new columns/tables are live:
+
+```bash
+DATABASE_URL=<prod-neon-url> npx prisma db push
+```
+
+Forgetting this means the app/sync will reference columns that don't exist in
+the DB and error. The trigger reliability itself comes from cron-job.org hitting
+`/api/sync` hourly (see `app/api/sync/route.ts`), not from GitHub's scheduler.
+
 ## What is known about the source APIs
 
 ### Qatar Living
