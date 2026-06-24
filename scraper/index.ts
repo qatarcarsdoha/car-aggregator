@@ -362,6 +362,40 @@ async function syncMzadQatar(): Promise<number> {
   }
 }
 
+/**
+ * Wait for Neon to wake up before doing any real work.
+ *
+ * Neon auto-suspends after ~5 min idle, and our cron cadence (hourly) is always
+ * longer than that — so every scheduled run hits a cold DB. The first query
+ * loses the race against Neon's wake and throws P1001. Instead of letting that
+ * first query be a real `syncRun.create()` (which fails the source and, with the
+ * old swallow-and-continue handling, silently no-ops the whole run), probe with
+ * a cheap `SELECT 1` and retry with backoff until the endpoint is awake.
+ */
+async function waitForDatabase(
+  attempts = 5,
+  delayMs = 3000
+): Promise<void> {
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      if (i > 1) console.log(`[db] reachable after ${i} attempts`);
+      return;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (i === attempts) {
+        throw new Error(
+          `Database unreachable after ${attempts} attempts: ${message}`
+        );
+      }
+      console.warn(
+        `[db] not ready (attempt ${i}/${attempts}) — waiting ${delayMs}ms for Neon to wake…`
+      );
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+}
+
 async function main() {
   const arg = process.argv[2] as SourceName | undefined;
 
@@ -371,9 +405,18 @@ async function main() {
     mzadqatar: syncMzadQatar,
   };
 
+  // Warm up the connection before any source runs. If the DB is genuinely
+  // unreachable this throws here (before scraping) and main() exits non-zero,
+  // letting the workflow's retry loop try again.
+  await waitForDatabase();
+
   // Collect per-source new-listing counts so we can fire ONE summary push after
   // the whole run, rather than spamming a notification per source.
   const counts: SourceNewCount[] = [];
+  // Track sources that failed so we can fail the process if any did. Swallowing
+  // per-source errors AND exiting 0 made cold-start failures look green and
+  // defeated the workflow's retry — never do both.
+  const failures: string[] = [];
 
   if (arg) {
     if (!sources[arg]) {
@@ -386,6 +429,7 @@ async function main() {
       try {
         counts.push({ source: name, newListings: await sources[name]() });
       } catch (err) {
+        failures.push(name);
         console.error(`[${name}] sync failed but continuing:`, err);
       }
     }
@@ -395,6 +439,12 @@ async function main() {
   await notifyNewListings(counts);
 
   await prisma.$disconnect();
+
+  // Exit non-zero if any source failed so the workflow's retry loop (and any
+  // monitoring) sees a genuine failure instead of a false green.
+  if (failures.length > 0) {
+    throw new Error(`Sync failed for: ${failures.join(", ")}`);
+  }
 }
 
 main().catch((err) => {
